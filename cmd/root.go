@@ -57,20 +57,20 @@ Learn more about Knative at: https://knative.dev`, cfg.Name),
 		SilenceErrors:     true, // we explicitly handle errors in Execute()
 	}
 
-	// Environment Variables
-	// Evaluated first after static defaults, set all flags to be associated with
-	// a version prefixed by "FUNC_"
+	// 对于有FUNC_前缀的环境变量(会自动将环境变量转换为大写识别),后缀名字绑定
 	viper.AutomaticEnv()       // read in environment variables for FUNC_<flag>
 	viper.SetEnvPrefix("func") // ensure that all have the prefix
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
-	// check if permissions for FUNC HOME are sufficient; warn if otherwise
+	// 使用 FUNC_CONFIG_FILE 定义配置文件。检查文件是否存在
 	cp := config.File()
 	if _, err := os.ReadFile(cp); os.IsPermission(err) {
 		fmt.Fprintf(os.Stderr, "Warning: Insufficient permissions to read config file at '%s' - continuing without it\n", cp)
 	}
-	// Client
-	// Use the provided ClientFactory or default to NewClient
+
+	// 使用客户端函数创建客户端(只是提供了声明和实现,具体调用看调用方),用户连接k8s集群
+	// 1) 正常情况下,需要使用NewClient函数
+	// 2) 扩展或者测试需要使用自定义的Client函数
 	newClient := cfg.NewClient
 	if newClient == nil {
 		newClient = NewClient
@@ -135,6 +135,7 @@ Learn more about Knative at: https://knative.dev`, cfg.Name),
 
 // registry to use is that provided as --registry or FUNC_REGISTRY.
 // If not provided, global configuration determines the default to use.
+// 支持设置环境变量 FUNC_REGISTRY 设置镜像仓库
 func registry() string {
 	if r := viper.GetString("registry"); r != "" {
 		return r
@@ -146,6 +147,7 @@ func registry() string {
 // effectivePath to use is that which was provided by --path or FUNC_PATH.
 // Manually parses flags such that this can be used during (cobra/viper) flag
 // definition (prior to parsing).
+// 支持设置环境变量 FUNC_PATH 设置生成的函数路径
 func effectivePath() (path string) {
 	var (
 		env = os.Getenv("FUNC_PATH")
@@ -173,6 +175,8 @@ func effectivePath() (path string) {
 // -> Environment Variables -> Flags.  This default calculation adds the
 // step of using the active Kubernetes namespace after Static Config and before
 // the optional Global Config setting.  The static default is "default"
+
+// 支持设定namespace;否则从 k8s 或者 ~/.config/func/config.yaml 下读取
 func defaultNamespace(f fn.Function, verbose bool) string {
 	// Specifically-requested
 	if f.Namespace != "" {

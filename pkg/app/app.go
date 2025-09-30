@@ -17,6 +17,7 @@ import (
 )
 
 func Main() {
+	// 允许终止
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -29,6 +30,7 @@ func Main() {
 		os.Exit(137)
 	}()
 
+	// 主函数
 	cfg := cmd.RootCommandConfig{
 		Name: "func",
 		Version: cmd.Version{
@@ -62,6 +64,7 @@ Please consider installing one of these:
 	}
 }
 
+// 容器运行时支持 podman或者docker
 func dockerOrPodmanInstalled() bool {
 	_, err := exec.LookPath("podman")
 	if err == nil {
