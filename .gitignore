@@ -35,6 +35,8 @@ __pycache__
 # Editors
 .vscode
 .idea
+.specstory/
+.cursorindexingignore
 
 # Operating system temporary files
 .DS_Store
