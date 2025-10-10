@@ -248,7 +248,7 @@ func RepositoriesPath() string {
 	return New().RepositoriesPath()
 }
 
-// OPTIONS
+// OPTIONS 选项
 // ---------
 
 // Option defines a function which when passed to the Client constructor
@@ -399,11 +399,9 @@ func (c *Client) Registry() string {
 	return c.registry
 }
 
-// Runtimes available in totality.
-// Not all repository/template combinations necessarily exist,
-// and further validation is performed when a template+runtime is chosen.
-// from a given repository.  This is the global list of all available.
-// Returned list is unique and sorted.
+// Runtimes 返回完整可用的模板+语言列表
+// 这里会在选择模板+语言时执行验证
+// 返回的列表是经过排序去重
 func (c *Client) Runtimes() ([]string, error) {
 	runtimes := utils.NewSortedSet()
 

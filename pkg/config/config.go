@@ -191,8 +191,8 @@ func File() string {
 	return path
 }
 
-// RepositoriesPath returns the full path at which to look for repositories.
-// Use FUNC_REPOSITORIES_PATH to override default.
+// RepositoriesPath 返回函数模板仓库路径
+// 可以使用 FUNC_REPOSITORIES_PATH 覆盖默认值(即不使用内置的模板)
 func RepositoriesPath() string {
 	path := filepath.Join(Dir(), Repositories)
 	if e := os.Getenv("FUNC_REPOSITORIES_PATH"); e != "" {

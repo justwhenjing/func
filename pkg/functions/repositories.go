@@ -77,9 +77,7 @@ func (r *Repositories) List() ([]string, error) {
 func (r *Repositories) All() (repos []Repository, err error) {
 	var repo Repository
 
-	// if in single-repo mode:
-	// Create a new repository from the remote URI, and set its name to
-	// the default so that it is treated as the default in place of the embedded.
+	// 采用git远程仓库
 	if r.remote != "" {
 		if repo, err = NewRepository(DefaultRepositoryName, r.remote); err != nil {
 			return
@@ -88,15 +86,13 @@ func (r *Repositories) All() (repos []Repository, err error) {
 		return
 	}
 
-	// When not in single-repo mode (above), the default repository is always
-	// first in the list
+	// 采用默认的本地模板
 	if repo, err = NewRepository("", ""); err != nil {
 		return
 	}
 	repos = append(repos, repo)
 
-	// Do not continue on to loading extended repositories unless path defined
-	// and it exists.
+	// 采用本地路径
 	if r.path == "" {
 		return
 	}

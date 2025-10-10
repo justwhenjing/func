@@ -94,6 +94,7 @@ EXAMPLES
 
 	addConfirmFlag(cmd, cfg.Confirm)
 	// TODO: refactor to use --path like all the other commands
+	// 目前是使用 FUNC_REPOSITORIES_PATH 可以指定
 	// 是否打印详细信息
 	addVerboseFlag(cmd, cfg.Verbose)
 

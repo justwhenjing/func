@@ -256,7 +256,8 @@ func runtimes(fs filesystem.Filesystem, repoCfg repoConfig) (runtimes []Runtime,
 		return
 	}
 
-	// For each directory at the path, load it as a runtime
+	// 取 templates下的目录名。目前有 go/node/python/quarkus/rust/springboot/typescript
+	// 忽略certs目录名
 	fis, err := fs.ReadDir(repoCfg.TemplatesPath)
 	if err != nil {
 		return

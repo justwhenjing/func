@@ -68,7 +68,7 @@ Learn more about Knative at: https://knative.dev`, cfg.Name),
 		fmt.Fprintf(os.Stderr, "Warning: Insufficient permissions to read config file at '%s' - continuing without it\n", cp)
 	}
 
-	// 使用客户端函数创建客户端(只是提供了声明和实现),用户连接k8s集群
+	// 创建客户端(只是提供了声明和实现),连接knative集群以及通用配置
 	// 1) 正常情况下,需要使用NewClient函数
 	// 2) 扩展或者测试需要使用自定义的Client函数
 	newClient := cfg.NewClient
