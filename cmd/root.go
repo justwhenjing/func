@@ -57,7 +57,7 @@ Learn more about Knative at: https://knative.dev`, cfg.Name),
 		SilenceErrors:     true, // we explicitly handle errors in Execute()
 	}
 
-	// 对于有FUNC_前缀的环境变量(会自动将环境变量转换为大写识别),后缀名字绑定
+	// 自动识别 FUNC_{后缀} 的环境变量(会自动将环境变量转换为大写识别),使用后缀名字作为变量名识别
 	viper.AutomaticEnv()       // read in environment variables for FUNC_<flag>
 	viper.SetEnvPrefix("func") // ensure that all have the prefix
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
@@ -68,7 +68,7 @@ Learn more about Knative at: https://knative.dev`, cfg.Name),
 		fmt.Fprintf(os.Stderr, "Warning: Insufficient permissions to read config file at '%s' - continuing without it\n", cp)
 	}
 
-	// 使用客户端函数创建客户端(只是提供了声明和实现,具体调用看调用方),用户连接k8s集群
+	// 使用客户端函数创建客户端(只是提供了声明和实现),用户连接k8s集群
 	// 1) 正常情况下,需要使用NewClient函数
 	// 2) 扩展或者测试需要使用自定义的Client函数
 	newClient := cfg.NewClient
@@ -76,7 +76,7 @@ Learn more about Knative at: https://knative.dev`, cfg.Name),
 		newClient = NewClient
 	}
 
-	// Grouped commands
+	// 命令行分组
 	groups := templates.CommandGroups{
 		{
 			Header: "Primary Commands:",
@@ -147,7 +147,7 @@ func registry() string {
 // effectivePath to use is that which was provided by --path or FUNC_PATH.
 // Manually parses flags such that this can be used during (cobra/viper) flag
 // definition (prior to parsing).
-// 支持设置环境变量 FUNC_PATH 设置生成的函数路径
+// 支持设置环境变量 FUNC_PATH 设置生成的模板路径
 func effectivePath() (path string) {
 	var (
 		env = os.Getenv("FUNC_PATH")
