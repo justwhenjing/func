@@ -9,6 +9,7 @@
 /target
 /hack/bin
 /.artifacts
+*zz_filesystem_generated.go
 
 /pkg/functions/testdata/migrations/*/.gitignore
 /pkg/functions/testdata/default_home/go

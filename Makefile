@@ -17,6 +17,9 @@ BIN_WINDOWS       ?= $(BIN)_windows_amd64.exe
 # Utilities
 BIN_GOLANGCI_LINT ?= "$(PWD)/bin/golangci-lint"
 
+# Target
+TARGET_DIR := ./target
+
 # Version
 # A verbose version is built into the binary including a date stamp, git commit
 # hash and the version tag of the current commit (semver) if it exists.
@@ -65,7 +68,7 @@ build: $(BIN) ## (default) Build binary for current OS
 
 .PHONY: $(BIN)
 $(BIN): generate/zz_filesystem_generated.go
-	env CGO_ENABLED=0 go build ./cmd/$(BIN)
+	env CGO_ENABLED=0 go build ./cmd/$(BIN) -o $(TARGET_DIR)
 
 .PHONY: test
 test: generate/zz_filesystem_generated.go ## Run core unit tests
