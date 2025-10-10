@@ -85,18 +85,22 @@ EXAMPLES
 	}
 
 	// Flags
+	// 语言
 	cmd.Flags().StringP("language", "l", cfg.Language, "Language Runtime (see help text for list) ($FUNC_LANGUAGE)")
+	// 模板
 	cmd.Flags().StringP("template", "t", fn.DefaultTemplate, "Function template. (see help text for list) ($FUNC_TEMPLATE)")
+	// git仓库(外部模板源)
 	cmd.Flags().StringP("repository", "r", "", "URI to a Git repository containing the specified template ($FUNC_REPOSITORY)")
 
 	addConfirmFlag(cmd, cfg.Confirm)
 	// TODO: refactor to use --path like all the other commands
+	// 是否打印详细信息
 	addVerboseFlag(cmd, cfg.Verbose)
 
 	// Help Action
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) { runCreateHelp(cmd, args, newClient) })
 
-	// Tab completion
+	// 自动补全
 	if err := cmd.RegisterFlagCompletionFunc("language", newRuntimeCompletionFunc(newClient)); err != nil {
 		fmt.Fprintf(os.Stderr, "unable to provide language runtime suggestions: %v", err)
 	}
@@ -109,17 +113,13 @@ EXAMPLES
 
 // Run Create
 func runCreate(cmd *cobra.Command, args []string, newClient ClientFactory) (err error) {
-	// Config
-	// Create a config based on args.  Also uses the newClient to create a
-	// temporary client for completing options such as available runtimes.
+	// 读取配置到cfg
 	cfg, err := newCreateConfig(cmd, args, newClient)
 	if err != nil {
 		return
 	}
 
-	// Client
-	// From environment variables, flags, arguments, and user prompts if --confirm
-	// (in increasing levels of precedence)
+	// 创建client
 	client, done := newClient(
 		ClientConfig{Verbose: cfg.Verbose},
 		fn.WithRepository(cfg.Repository))
@@ -185,6 +185,9 @@ func newCreateConfig(cmd *cobra.Command, args []string, newClient ClientFactory)
 	// Convert the path to an absolute path, and extract the ending directory name
 	// as the function name. TODO: refactor to be git-like with no name up-front
 	// and set instead as a named one-to-many deploy target.
+	// 使用空格分割,提取最后一个信息作为工作路径,并且转换为绝对路径
+	// 使用目录名作为函数名
+	// 最后一个为 a/b,则函数名为b,工作路径为 a/b 的绝对路径
 	dirName, absolutePath = deriveNameAndAbsolutePathFromPath(path)
 
 	// Config is the final default values based off the execution context.
@@ -198,7 +201,7 @@ func newCreateConfig(cmd *cobra.Command, args []string, newClient ClientFactory)
 		Confirm:    viper.GetBool("confirm"),
 		Verbose:    viper.GetBool("verbose"),
 	}
-	// If not in confirm/prompting mode, this cfg structure is complete.
+	// 如果不在确认/提示模式下,这个cfg结构是完整的(不采用交互模式)
 	if !cfg.Confirm {
 		return
 	}

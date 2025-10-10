@@ -535,14 +535,10 @@ func (c *Client) New(ctx context.Context, cfg Function) (string, Function, error
 	return route, f, err
 }
 
-// Initialize a new function with the given function struct defaults.
-// Does not build/push/deploy. Local FS changes only.  For higher-level
-// control see New or Apply.
-//
-// <path> will default to the absolute path of the current working directory.
-// <name> will default to the current working directory.
-// When <name> is provided but <path> is not, a directory <name> is created
-// in the current working directory and used for <path>.
+// 初始化一个新函数,不构建/推送/部署. 本地FS更改只有. 更高级别的控制请参阅New或Apply.
+// <path> 默认将当前工作目录的绝对路径.
+// <name> 默认将当前工作目录.
+// 当 <name> 提供但 <path> 未提供时,在当前工作目录中创建一个 <name> 目录,并用于 <path>.
 func (c *Client) Init(cfg Function) (Function, error) {
 	// convert Root path to absolute
 	var err error
@@ -553,7 +549,7 @@ func (c *Client) Init(cfg Function) (Function, error) {
 		return cfg, err
 	}
 
-	// Create project root directory, if it doesn't already exist
+	// 创建目录
 	if err = os.MkdirAll(cfg.Root, 0755); err != nil {
 		return cfg, err
 	}
@@ -585,20 +581,20 @@ func (c *Client) Init(cfg Function) (Function, error) {
 		return cfg, err
 	}
 
-	// Create a new function (in memory)
+	// 创建一个新函数(在内存中)
 	f := NewFunctionWith(cfg)
 
-	// Create a .func diretory which is also added to a .gitignore
+	// 创建一个 .func 目录,并添加到 .gitignore
 	if err = ensureRunDataDir(f.Root); err != nil {
 		return f, err
 	}
 
-	//create a .funcignore file
+	// 创建一个 .funcignore 文件
 	if err = ensureFuncIgnore(f.Root); err != nil {
 		return f, err
 	}
 
-	// Write out the new function's Template files.
+	// 写入新函数的模板文件
 	if err = c.Templates().Write(&f); err != nil {
 		return f, err
 	}

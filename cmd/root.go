@@ -221,6 +221,7 @@ func interactiveTerminal() bool {
 type bindFunc func(*cobra.Command, []string) error
 
 // bindEnv returns a bindFunc that binds env vars to the named flags.
+// 自动识别 FUNC_{后缀} 的环境变量(会自动将环境变量转换为大写识别),使用后缀名字作为变量名识别
 func bindEnv(flags ...string) bindFunc {
 	return func(cmd *cobra.Command, args []string) (err error) {
 		for _, flag := range flags {
