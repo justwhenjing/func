@@ -9,11 +9,11 @@ type Format string
 
 const (
 	Human Format = "human" // Headers, indentation, justification etc.
-	Plain        = "plain" // Suitable for cli automation via sed/awk etc.
-	JSON         = "json"  // Technically a ⊆ yaml, but no one likes yaml.
-	XML          = "xml"
-	YAML         = "yaml"
-	URL          = "url"
+	Plain Format = "plain" // Suitable for cli automation via sed/awk etc.
+	JSON  Format = "json"  // Technically a ⊆ yaml, but no one likes yaml.
+	XML   Format = "xml"
+	YAML  Format = "yaml"
+	URL   Format = "url"
 )
 
 // formatter is any structure which has methods for serialization.
