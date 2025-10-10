@@ -533,10 +533,6 @@ func (c *Client) New(ctx context.Context, cfg Function) (string, Function, error
 	return route, f, err
 }
 
-// 初始化一个新函数,不构建/推送/部署. 本地FS更改只有. 更高级别的控制请参阅New或Apply.
-// <path> 默认将当前工作目录的绝对路径.
-// <name> 默认将当前工作目录.
-// 当 <name> 提供但 <path> 未提供时,在当前工作目录中创建一个 <name> 目录,并用于 <path>.
 func (c *Client) Init(cfg Function) (Function, error) {
 	// convert Root path to absolute
 	var err error
@@ -552,7 +548,7 @@ func (c *Client) Init(cfg Function) (Function, error) {
 		return cfg, err
 	}
 
-	// Create should never clobber a pre-existing function
+	// 如果已存在则报错
 	hasFunc, err := hasInitializedFunction(cfg.Root)
 	if err != nil {
 		return cfg, err
@@ -561,20 +557,19 @@ func (c *Client) Init(cfg Function) (Function, error) {
 		return cfg, fmt.Errorf("function at '%v' already initialized", cfg.Root)
 	}
 
-	// Path is defaulted to the current working directory
+	// 路径默认是当前工作目录
 	if cfg.Root == "" {
 		if cfg.Root, err = os.Getwd(); err != nil {
 			return cfg, err
 		}
 	}
 
-	// Name is defaulted to the directory of the given path.
+	// 名称默认是路径的目录名
 	if cfg.Name == "" {
 		cfg.Name = nameFromPath(cfg.Root)
 	}
 
-	// The path for the new function should not have any contentious files
-	// (hidden files OK, unless it's one used by func)
+	// 新函数的路径不应该有任何争议文件(隐藏文件除外)
 	if err := assertEmptyRoot(cfg.Root); err != nil {
 		return cfg, err
 	}
@@ -592,7 +587,7 @@ func (c *Client) Init(cfg Function) (Function, error) {
 		return f, err
 	}
 
-	// 写入新函数的模板文件
+	// 写入新函数的模板文件(命令行指定模板)
 	if err = c.Templates().Write(&f); err != nil {
 		return f, err
 	}

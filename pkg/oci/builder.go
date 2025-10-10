@@ -44,6 +44,7 @@ var defaultIgnored = []string{
 	".gitignore",
 }
 
+// OCI 构建器支持的语言
 var builders = map[string]languageBuilder{
 	"go":     goBuilder{},
 	"python": pythonBuilder{},

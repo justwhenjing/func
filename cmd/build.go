@@ -88,51 +88,52 @@ EXAMPLES
 		cfg = cfg.Apply(f) // defined values on f take precedence over cfg defaults
 	}
 
-	// Flags
-	//
-	// NOTE on flag defaults:
-	// Use the config value when available, as this will include global static
-	// defaults, user settings and the value from the function with context.
-	// Use the function struct for flag flags which are not globally configurable
-	//
-	// Globally-Configurable Flags:
-	// Options whose value may be defined globally may also exist on the
-	// contextually relevant function; sets are flattened above via cfg.Apply(f)
+	// 通用配置
+
+	// 构建器,可以使用-b 或者 FUNC_BUILDER 指定
+	// 支持 host(标准OCI)构建器,但是只支持go和py
+	// 支持 pack(Buildpacks)构建器,支持nodejs,typescript,go,python,quarkus,rust,springboot,但是需要docker或者podman
+	// 支持 s2i(S2I)构建器,适配OCP平台,支持nodejs,typescript,go,python,quarkus,需要docker
 	cmd.Flags().StringP("builder", "b", cfg.Builder,
-		fmt.Sprintf("Builder to use when creating the function's container. Currently supported builders are %s. ($FUNC_BUILDER)", KnownBuilders()))
+		fmt.Sprintf("Builder to use when creating the function's container. Currently supported builders are %s. ($FUNC_BUILDER)",
+			KnownBuilders()))
+	// 镜像仓库地址+镜像仓库命名空间, 可以使用-r 或者 FUNC_REGISTRY 指定
 	cmd.Flags().StringP("registry", "r", cfg.Registry,
 		"Container registry + registry namespace. (ex 'ghcr.io/myuser').  The full image name is automatically determined using this along with function name. ($FUNC_REGISTRY)")
-	cmd.Flags().Bool("registry-insecure", cfg.RegistryInsecure, "Skip TLS certificate verification when communicating in HTTPS with the registry ($FUNC_REGISTRY_INSECURE)")
+	// 跳过TLS证书验证,可以使用--registry-insecure 或者 FUNC_REGISTRY_INSECURE 指定
+	cmd.Flags().Bool("registry-insecure", cfg.RegistryInsecure,
+		"Skip TLS certificate verification when communicating in HTTPS with the registry ($FUNC_REGISTRY_INSECURE)")
 
-	// Function-Context Flags:
-	// Options whose value is available on the function with context only
-	// (persisted but not globally configurable)
+	// 上下文配置
+	// 上下文配置,会存放到 func.yaml 文件中,不会变成通用配置
 	builderImage := f.Build.BuilderImages[f.Build.Builder]
+
+	// 指定构建器镜像,用于分阶段构建,可以使用--builder-image 或者 FUNC_BUILDER_IMAGE 指定
 	cmd.Flags().StringP("builder-image", "", builderImage,
 		"Specify a custom builder image for use by the builder other than its default. ($FUNC_BUILDER_IMAGE)")
+	// 指定基础镜像,可以使用--base-image 或者 FUNC_BASE_IMAGE 指定
 	cmd.Flags().StringP("base-image", "", f.Build.BaseImage,
 		"Override the base image for your function (host builder only)")
+	// 指定构建镜像名称,可以使用--image 或者 FUNC_IMAGE 指定
 	cmd.Flags().StringP("image", "i", f.Image,
 		"Full image name in the form [registry]/[namespace]/[name]:[tag] (optional). This option takes precedence over --registry ($FUNC_IMAGE)")
 
-	// Static Flags:
-	// Options which are either empty or have static defaults only (not
-	// globally configurable nor persisted with the function)
+	// 静态配置(不会存放于任何位置)
+
+	// 推送镜像到镜像仓库,可以使用--push
 	cmd.Flags().BoolP("push", "u", false,
 		"Attempt to push the function image to the configured registry after being successfully built")
+	// 指定平台,可以使用--platform linux/amd64 linux/arm64之类
 	cmd.Flags().StringP("platform", "", "",
 		"Optionally specify a target platform, for example \"linux/amd64\" when using the s2i build strategy")
-	cmd.Flags().StringP("username", "", "",
-		"Username to use when pushing to the registry.")
-	cmd.Flags().StringP("password", "", "",
-		"Password to use when pushing to the registry.")
-	cmd.Flags().StringP("token", "", "",
-		"Token to use when pushing to the registry.")
+	// 用于镜像仓库认证(用户+密码 或者 token)
+	cmd.Flags().StringP("username", "", "", "Username to use when pushing to the registry.")
+	cmd.Flags().StringP("password", "", "", "Password to use when pushing to the registry.")
+	cmd.Flags().StringP("token", "", "", "Token to use when pushing to the registry.")
+	// 构建时间
 	cmd.Flags().BoolP("build-timestamp", "", false, "Use the actual time as the created time for the docker image. This is only useful for buildpacks builder.")
 
-	// Temporarily Hidden Basic Auth Flags
-	// Username, Password and Token flags, which plumb through basic auth, are
-	// currently only available on the "host" builder.
+	// 暂时隐藏基础认证标志
 	_ = cmd.Flags().MarkHidden("username")
 	_ = cmd.Flags().MarkHidden("password")
 	_ = cmd.Flags().MarkHidden("token")
@@ -142,7 +143,7 @@ EXAMPLES
 	addPathFlag(cmd)
 	addVerboseFlag(cmd, cfg.Verbose)
 
-	// Tab Completion
+	// 补全
 	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuilderList); err != nil {
 		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
 	}
@@ -158,23 +159,32 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 		cfg buildConfig
 		f   fn.Function
 	)
-	if cfg, err = newBuildConfig().Prompt(); err != nil { // gather values into a single instruction set
+
+	// 收集配置
+	if cfg, err = newBuildConfig().Prompt(); err != nil {
 		return
 	}
-	if err = cfg.Validate(); err != nil { // Perform any pre-validation
+
+	// 验证配置
+	if err = cfg.Validate(); err != nil {
 		return
 	}
-	if f, err = fn.NewFunction(cfg.Path); err != nil { // Read in the Function
+
+	// 加载func
+	if f, err = fn.NewFunction(cfg.Path); err != nil {
 		return
 	}
 	if !f.Initialized() {
 		return fn.NewErrNotInitialized(f.Root)
 	}
-	f = cfg.Configure(f) // Returns an f updated with values from the config (flags, envs, etc)
 
-	cmd.SetContext(cfg.WithValues(cmd.Context())) // Some optional settings are passed via context
+	// 加载配置
+	f = cfg.Configure(f)
 
-	// Client
+	// 设置上下文
+	cmd.SetContext(cfg.WithValues(cmd.Context()))
+
+	// 创建client
 	clientOptions, err := cfg.clientOptions()
 	if err != nil {
 		return
@@ -182,24 +192,26 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, clientOptions...)
 	defer done()
 
-	// Build
-	buildOptions, err := cfg.buildOptions() // build-specific options from the finalized cfg
+	// 构建
+	buildOptions, err := cfg.buildOptions()
 	if err != nil {
 		return
 	}
 	if f, err = client.Build(cmd.Context(), f, buildOptions...); err != nil {
 		return
 	}
+
+	// 推送镜像
 	if cfg.Push {
 		if f, _, err = client.Push(cmd.Context(), f); err != nil {
 			return
 		}
 	}
+
+	// 更新func.yaml
 	if err = f.Write(); err != nil {
 		return
 	}
-	// Stamp is a performance optimization: treat the function as being built
-	// (cached) unless the fs changes.
 	return f.Stamp()
 }
 

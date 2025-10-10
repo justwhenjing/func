@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	Host    = "host"
-	Pack    = "pack"
-	S2I     = "s2i"
-	Default = Pack
+	Host    = "host" // 主机构建器(OCI Builder)
+	Pack    = "pack" // 包构建器(Buildpacks Builder)
+	S2I     = "s2i"  // S2I构建器(S2I Builder)
+	Default = Pack   // 默认构建器(Buildpacks Builder)
 )
 
 // Known builder names with a pretty-printed string representation

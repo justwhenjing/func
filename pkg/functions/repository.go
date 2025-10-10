@@ -243,11 +243,7 @@ func filesystemFromPath(uri string) (f filesystem.Filesystem, err error) {
 	return filesystem.NewOsFilesystem(path), nil
 }
 
-// runtimes returns runtimes defined in this repository's filesystem.
-// The views are denormalized, using the parent repository's values
-// for inherited fields BuildConfig and HealthEndpoints as the default values
-// for the runtimes and templates.  The runtimes and templates themselves can
-// override these values by specifying new values in thir config files.
+// runtimes 返回运行时信息。用于补全和回显
 func runtimes(fs filesystem.Filesystem, repoCfg repoConfig) (runtimes []Runtime, err error) {
 	// Validate templates path
 	if err = checkDir(fs, repoCfg.TemplatesPath); err != nil {
@@ -256,8 +252,8 @@ func runtimes(fs filesystem.Filesystem, repoCfg repoConfig) (runtimes []Runtime,
 		return
 	}
 
-	// 取 templates下的目录名。目前有 go/node/python/quarkus/rust/springboot/typescript
-	// 忽略certs目录名
+	// 取templates下的目录名。目前有 go/node/python/quarkus/rust/springboot/typescript
+	// 忽略certs
 	fis, err := fs.ReadDir(repoCfg.TemplatesPath)
 	if err != nil {
 		return
@@ -275,13 +271,13 @@ func runtimes(fs filesystem.Filesystem, repoCfg repoConfig) (runtimes []Runtime,
 			Name: fi.Name(),
 		}
 
-		// Load the runtimeConfig (manifest.yaml) with values from the
-		// shared repoCfg as defaults.
+		// 加载运行时配置(优先使用公共配置)
 		runtime.config, err = loadRuntimeConfig(fs, repoCfg, runtime.Name)
 		if err != nil {
 			return
 		}
 
+		// 加载模板
 		runtime.Templates, err = templates(fs, repoCfg, runtime.config, runtime.Name)
 		if err != nil {
 			return
@@ -291,14 +287,10 @@ func runtimes(fs filesystem.Filesystem, repoCfg repoConfig) (runtimes []Runtime,
 	return
 }
 
-// templates returns templates currently defined in the given runtime's
-// filesystem.  The view is denormalized, using the inherited fields from the
-// runtime for defaults of BuildConfig andHealthEndpoints.  The template itself
-// can override these by including a manifest.
-// The reserved word "scaffolding" is used for repository-defined scaffolding
-// code and is not listed as a template.
+// templates 返回当前运行时对应的模板(可以有多个),目前只有http和cloudevents
+// scaffolding用于代码库定义的脚手架代码,不作为模板列出
 func templates(fs filesystem.Filesystem, repoCfg repoConfig, runtimeCfg runtimeConfig, runtimeName string) (templates []Template, err error) {
-	// Validate runtime path
+	// 模板配置路径：templates/{runtime}/{template}/manifest.yaml
 	runtimePath := path.Join(repoCfg.TemplatesPath, runtimeName)
 	if err = checkDir(fs, runtimePath); err != nil {
 		err = fmt.Errorf("runtime path '%v' not found. %v", runtimePath, err)
@@ -326,7 +318,7 @@ func templates(fs filesystem.Filesystem, repoCfg repoConfig, runtimeCfg runtimeC
 			fs:         filesystem.NewSubFS(path.Join(runtimePath, fi.Name()), fs),
 		}
 
-		// update repoCfg with template's manifest.yaml valuse
+		// 加载对应模板信息(优先使用公共配置)
 		t.config, err = loadTemplateConfig(fs, repoCfg, runtimeCfg, runtimeName, t.name)
 		if err != nil {
 			return
@@ -455,17 +447,19 @@ func getGitCloneOptions(uri string) *git.CloneOptions {
 	return opt
 }
 
-// Template from repo for given runtime.
+// Template 根据模板名字判断模板是否存在。不存在则报错
 func (r *Repository) Template(runtimeName, name string) (t Template, err error) {
 	runtime, err := r.Runtime(runtimeName)
 	if err != nil {
 		return
 	}
+
 	for _, t := range runtime.Templates {
 		if t.Name() == name {
 			return t, nil
 		}
 	}
+
 	return nil, ErrTemplateNotFound
 }
 

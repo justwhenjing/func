@@ -97,7 +97,7 @@ func (t *Templates) Write(f *Function) error {
 		return err
 	}
 
-	// The function's Template
+	// 查看模板
 	template, err := t.Get(f.Runtime, f.Template)
 	if err != nil {
 		return err

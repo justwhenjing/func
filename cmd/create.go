@@ -87,7 +87,7 @@ EXAMPLES
 	// Flags
 	// 语言
 	cmd.Flags().StringP("language", "l", cfg.Language, "Language Runtime (see help text for list) ($FUNC_LANGUAGE)")
-	// 模板
+	// 模板,可以是cloudevents或者http
 	cmd.Flags().StringP("template", "t", fn.DefaultTemplate, "Function template. (see help text for list) ($FUNC_TEMPLATE)")
 	// git仓库(外部模板源)
 	cmd.Flags().StringP("repository", "r", "", "URI to a Git repository containing the specified template ($FUNC_REPOSITORY)")

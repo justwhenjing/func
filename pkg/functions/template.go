@@ -79,6 +79,8 @@ func (t template) Write(ctx context.Context, f *Function) error {
 	if f.Deploy.HealthEndpoints.Readiness == "" {
 		f.Deploy.HealthEndpoints.Readiness = t.config.Readiness
 	}
+
+	// 设置函数模板
 	if f.Invoke == "" && t.config.Invoke != "http" {
 		f.Invoke = t.config.Invoke
 	}
@@ -88,5 +90,6 @@ func (t template) Write(ctx context.Context, f *Function) error {
 		return f == manifestFile
 	}
 
-	return filesystem.CopyFromFS(".", f.Root, filesystem.NewMaskingFS(mask, t.fs)) // copy everything but manifest.yaml
+	// 复制模板文件(除了manifest.yaml)
+	return filesystem.CopyFromFS(".", f.Root, filesystem.NewMaskingFS(mask, t.fs))
 }

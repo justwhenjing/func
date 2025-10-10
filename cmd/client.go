@@ -77,8 +77,6 @@ func NewClient(cfg ClientConfig, options ...fn.Option) (*fn.Client, func()) {
 		}
 	)
 
-	// Client is constructed with standard options plus any additional options
-	// which either augment or override the defaults.
 	client := fn.New(append(o, options...)...)
 
 	// A deferrable cleanup function which is used to perform any cleanup, such
