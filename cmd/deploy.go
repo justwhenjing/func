@@ -196,11 +196,9 @@ EXAMPLES
 	cmd.Flags().String("service-account", f.Deploy.ServiceAccountName,
 		"Service account to be used in the deployed function ($FUNC_SERVICE_ACCOUNT)")
 
-	// Static Flags:
-	// Options which have static defaults only (not globally configurable nor
-	// persisted with the function)
-	cmd.Flags().String("build", "auto",
-		"Build the function. [auto|true|false]. ($FUNC_BUILD)")
+	// 静态配置
+	// --build 是否构建镜像。--build=0 此时会使用已有镜像
+	cmd.Flags().String("build", "auto", "Build the function. [auto|true|false]. ($FUNC_BUILD)")
 	cmd.Flags().Lookup("build").NoOptDefVal = "true" // register `--build` as equivalient to `--build=true`
 
 	// 推送镜像

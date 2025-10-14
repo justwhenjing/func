@@ -68,7 +68,8 @@ build: $(BIN) ## (default) Build binary for current OS
 
 .PHONY: $(BIN)
 $(BIN): generate/zz_filesystem_generated.go
-	env CGO_ENABLED=0 go build ./cmd/$(BIN) -o $(TARGET_DIR)
+	@mkdir -p $(TARGET_DIR)
+	env CGO_ENABLED=0 go build -o $(TARGET_DIR) ./cmd/$(BIN)
 
 .PHONY: test
 test: generate/zz_filesystem_generated.go ## Run core unit tests

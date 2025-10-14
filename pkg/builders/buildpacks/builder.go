@@ -15,6 +15,7 @@ import (
 
 	"github.com/Masterminds/semver"
 	pack "github.com/buildpacks/pack/pkg/client"
+	packimage "github.com/buildpacks/pack/pkg/image"
 	"github.com/buildpacks/pack/pkg/logging"
 	"github.com/buildpacks/pack/pkg/project/types"
 	"github.com/docker/docker/client"
@@ -161,6 +162,7 @@ func (b *Builder) Build(ctx context.Context, f fn.Function, platforms []fn.Platf
 		LifecycleImage: DefaultLifecycleImage,
 		Builder:        image,
 		Buildpacks:     buildpacks,
+		PullPolicy:     packimage.PullNever,
 		ProjectDescriptor: types.Descriptor{
 			Build: types.Build{
 				Exclude: excludes,
@@ -235,6 +237,12 @@ func (b *Builder) Build(ctx context.Context, f fn.Function, platforms []fn.Platf
 	}
 
 	// Perform the build
+	// 调用 Cloud Native Buildpacks接口
+	// 1) 拉取 builder镜像
+	// 2) 准备源码和排除文件
+	// 3) 启动构建容器
+	// 4) 执行构建
+	// 5) 生成镜像
 	if err = impl.Build(ctx, opts); err != nil {
 		if ctx.Err() != nil {
 			return // SIGINT
