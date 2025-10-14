@@ -150,20 +150,14 @@ EXAMPLES
 		cfg = cfg.Apply(f)
 	}
 
-	// Flags
-	//
-	// Globally-Configurable Flags:
-	// Options whose value may be defined globally may also exist on the
-	// contextually relevant function; but sets are flattened via cfg.Apply(f)
+	// 全局配置
 	cmd.Flags().StringP("builder", "b", cfg.Builder,
 		fmt.Sprintf("Builder to use when creating the function's container. Currently supported builders are %s.", KnownBuilders()))
 	cmd.Flags().StringP("registry", "r", cfg.Registry,
 		"Container registry + registry namespace. (ex 'ghcr.io/myuser').  The full image name is automatically determined using this along with function name. ($FUNC_REGISTRY)")
 	cmd.Flags().Bool("registry-insecure", cfg.RegistryInsecure, "Skip TLS certificate verification when communicating in HTTPS with the registry ($FUNC_REGISTRY_INSECURE)")
 
-	// Function-Context Flags:
-	// Options whose value is available on the function with context only
-	// (persisted but not globally configurable)
+	// 上下文配置
 	builderImage := f.Build.BuilderImages[f.Build.Builder]
 	cmd.Flags().String("builder-image", builderImage,
 		"Specify a custom builder image for use by the builder other than its default. ($FUNC_BUILDER_IMAGE)")
@@ -192,29 +186,28 @@ EXAMPLES
 		"When triggering a remote deployment, set a custom volume size to allocate for the build operation ($FUNC_PVC_SIZE)")
 	cmd.Flags().String("service-account", f.Deploy.ServiceAccountName,
 		"Service account to be used in the deployed function ($FUNC_SERVICE_ACCOUNT)")
+
 	// Static Flags:
 	// Options which have static defaults only (not globally configurable nor
 	// persisted with the function)
 	cmd.Flags().String("build", "auto",
 		"Build the function. [auto|true|false]. ($FUNC_BUILD)")
 	cmd.Flags().Lookup("build").NoOptDefVal = "true" // register `--build` as equivalient to `--build=true`
-	cmd.Flags().BoolP("push", "u", true,
-		"Push the function image to registry before deploying. ($FUNC_PUSH)")
-	cmd.Flags().String("platform", "",
-		"Optionally specify a specific platform to build for (e.g. linux/amd64). ($FUNC_PLATFORM)")
-	cmd.Flags().StringP("username", "", "",
-		"Username to use when pushing to the registry.")
-	cmd.Flags().StringP("password", "", "",
-		"Password to use when pushing to the registry.")
-	cmd.Flags().StringP("token", "", "",
-		"Token to use when pushing to the registry.")
+
+	// 推送镜像
+	cmd.Flags().BoolP("push", "u", true, "Push the function image to registry before deploying. ($FUNC_PUSH)")
+	cmd.Flags().String("platform", "", "Optionally specify a specific platform to build for (e.g. linux/amd64). ($FUNC_PLATFORM)")
+	// 镜像仓库认证(用户+密码 或者 token)
+	cmd.Flags().StringP("username", "", "", "Username to use when pushing to the registry.")
+	cmd.Flags().StringP("password", "", "", "Password to use when pushing to the registry.")
+	cmd.Flags().StringP("token", "", "", "Token to use when pushing to the registry.")
+	// 时间戳
 	cmd.Flags().BoolP("build-timestamp", "", false, "Use the actual time as the created time for the docker image. This is only useful for buildpacks builder.")
+	// 部署租户
 	cmd.Flags().StringP("namespace", "n", defaultNamespace(f, false),
 		"Deploy into a specific namespace. Will use the function's current namespace by default if already deployed, and the currently active context if it can be determined. ($FUNC_NAMESPACE)")
 
-	// Temporarily Hidden Basic Auth Flags
-	// Username, Password and Token flags, which plumb through basic auth, are
-	// currently only available on "host" builder.
+	// 隐藏基础认证标志
 	_ = cmd.Flags().MarkHidden("username")
 	_ = cmd.Flags().MarkHidden("password")
 	_ = cmd.Flags().MarkHidden("token")
@@ -224,7 +217,7 @@ EXAMPLES
 	addPathFlag(cmd)
 	addVerboseFlag(cmd, cfg.Verbose)
 
-	// Tab Completion
+	// 补全
 	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuilderList); err != nil {
 		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
 	}
