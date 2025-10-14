@@ -166,18 +166,27 @@ EXAMPLES
 	cmd.Flags().StringP("image", "i", f.Image,
 		"Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. ($FUNC_IMAGE)")
 
+	// 环境变量, 使用 NAME=VALUE 设置变量; 使用 NAME- 删除变量
 	cmd.Flags().StringArrayP("env", "e", []string{},
 		"Environment variable to set in the form NAME=VALUE. "+
 			"You may provide this flag multiple times for setting multiple environment variables. "+
 			"To unset, specify the environment variable name followed by a \"-\" (e.g., NAME-).")
+	// 自定义服务域名,可以使用 FUNC_DOMAIN 指定(k8s集群需要配置域名映射和DNS解析)
 	cmd.Flags().String("domain", f.Domain,
 		"Domain to use for the function's route.  Cluster must be configured with domain matching for the given domain (ignored if unrecognized) ($FUNC_DOMAIN)")
+
+	// git 配置。从远程拉代码并在集群上构建
+	// git仓库地址
 	cmd.Flags().StringP("git-url", "g", f.Build.Git.URL,
 		"Repository url containing the function to build ($FUNC_GIT_URL)")
+	// 分支
 	cmd.Flags().StringP("git-branch", "t", f.Build.Git.Revision,
 		"Git revision (branch) to be used when deploying via the Git repository ($FUNC_GIT_BRANCH)")
+	// 内部目录
 	cmd.Flags().StringP("git-dir", "d", f.Build.Git.ContextDir,
 		"Directory in the Git repository containing the function (default is the root) ($FUNC_GIT_DIR)")
+
+	//
 	cmd.Flags().BoolP("remote", "R", f.Local.Remote,
 		"Trigger a remote deployment. Default is to deploy and build from the local system ($FUNC_REMOTE)")
 	cmd.Flags().StringP("remote-storage-class", "", f.Build.RemoteStorageClass,
