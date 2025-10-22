@@ -57,7 +57,7 @@ func (b pythonBuilder) WriteShared(job buildJob) (layers []imageLayer, err error
 	var desc v1.Descriptor
 	var layer v1.Layer
 
-	// Create venv
+	// 1) 创建venv虚拟环境
 	if job.verbose {
 		fmt.Printf("python -m venv .venv\n")
 	}
@@ -71,7 +71,7 @@ func (b pythonBuilder) WriteShared(job buildJob) (layers []imageLayer, err error
 
 	pipPath := filepath.Join(".venv", "bin", "pip")
 
-	// Upgrade pip
+	// 2) 升级pip
 	if job.verbose {
 		fmt.Printf(".venv/bin/pip install --upgrade pip\n")
 	}
@@ -83,8 +83,7 @@ func (b pythonBuilder) WriteShared(job buildJob) (layers []imageLayer, err error
 		return
 	}
 
-	// Install Dependencies of the current project into ./lib
-	// In the scaffolding direcotory.
+	// 3) 安装依赖
 	if job.verbose {
 		fmt.Printf(".venv/bin/pip install . --target lib\n")
 	}
@@ -96,24 +95,24 @@ func (b pythonBuilder) WriteShared(job buildJob) (layers []imageLayer, err error
 		return
 	}
 
-	// Tar up the now-final build directory
+	// 4) 打包依赖
 	source := job.buildDir()
 	target := filepath.Join(job.buildDir(), "lib.tar.gz")
 	if err = newPythonLibTarball(job, source, target); err != nil {
 		return
 	}
 
-	// Layer
+	// 5) 转换为OCI层
 	if layer, err = tarball.LayerFromFile(target); err != nil {
 		return
 	}
 
-	// Descriptor
+	// 6) 生成描述符
 	if desc, err = newDescriptor(layer); err != nil {
 		return
 	}
 
-	// Blob
+	// 7) 移动到blobs目录
 	blob := filepath.Join(job.blobsDir(), desc.Digest.Hex)
 	if job.verbose {
 		fmt.Printf("mv %v %v\n", rel(job.buildDir(), target), rel(job.buildDir(), blob))

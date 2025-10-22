@@ -19,41 +19,40 @@ import (
 type goBuilder struct{}
 
 func (b goBuilder) Base(customImage string) string {
-	// if not defined -> return "", meaning building from scratch
+	// 如果未定义，则返回空字符串，表示从头开始构建
 	return customImage
 }
 
 func (b goBuilder) Configure(_ buildJob, _ v1.Platform, cf v1.ConfigFile) (v1.ConfigFile, error) {
-	// : Using Cmd rather than Entrypoint due to it being overrideable.
+	// 使用Cmd而不是Entrypoint，因为Cmd可以被覆盖
 	cf.Config.Cmd = []string{"/func/f"}
 	cf.Config.Env = append(cf.Config.Env, "LISTEN_ADDRESS=[::]:8080")
 	return cf, nil
 }
 
 func (b goBuilder) WriteShared(_ buildJob) ([]imageLayer, error) {
-	return []imageLayer{}, nil // no shared dependencies generated on build
+	return []imageLayer{}, nil // 没有共享依赖生成在构建时
 }
 
-// ForPlatform returns layers from source code as Go, cross compiled for the given
-// platform, placing the statically linked binary in a tarred layer and return
-// the Descriptor and Layer metadata.
+// WritePlatform 创建平台特定层
+// 使用交叉编译生成静态链接的二进制文件，并打包成tar文件
 func (b goBuilder) WritePlatform(cfg buildJob, p v1.Platform) (layers []imageLayer, err error) {
 	var desc v1.Descriptor
 	var layer v1.Layer
 
-	// Executable
+	// 1) 交叉编译
 	exe, err := goBuild(cfg, p) // Compile binary returning its path
 	if err != nil {
 		return
 	}
 
-	// Tarball
+	// 2) 打包可执行文件
 	target := filepath.Join(cfg.buildDir(), fmt.Sprintf("execlayer.%v.%v.tar.gz", p.OS, p.Architecture))
 	if err = goExeTarball(exe, target, cfg.verbose); err != nil {
 		return
 	}
 
-	// Layer
+	// 3) 转换为OCI层
 	if layer, err = tarball.LayerFromFile(target); err != nil {
 		return
 	}

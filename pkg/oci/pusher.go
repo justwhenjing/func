@@ -8,8 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"golang.org/x/term"
-
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -17,6 +15,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/pkg/errors"
 	progress "github.com/schollz/progressbar/v3"
+	"golang.org/x/term"
 
 	fn "knative.dev/func/pkg/functions"
 )

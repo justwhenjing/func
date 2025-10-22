@@ -90,10 +90,7 @@ EXAMPLES
 
 	// 通用配置
 
-	// 构建器,可以使用-b 或者 FUNC_BUILDER 指定
-	// 支持 host(标准OCI)构建器,但是只支持go和py
-	// 支持 pack(Buildpacks)构建器,支持nodejs,typescript,go,python,quarkus,rust,springboot,但是需要docker或者podman
-	// 支持 s2i(S2I)构建器,适配OCP平台,支持nodejs,typescript,go,python,quarkus,需要docker
+	// 构建器, 见clientopts
 	cmd.Flags().StringP("builder", "b", cfg.Builder,
 		fmt.Sprintf("Builder to use when creating the function's container. Currently supported builders are %s. ($FUNC_BUILDER)",
 			KnownBuilders()))
@@ -111,10 +108,10 @@ EXAMPLES
 	// 指定构建器镜像,用于分阶段构建,可以使用--builder-image 或者 FUNC_BUILDER_IMAGE 指定
 	cmd.Flags().StringP("builder-image", "", builderImage,
 		"Specify a custom builder image for use by the builder other than its default. ($FUNC_BUILDER_IMAGE)")
-	// 指定基础镜像,可以使用--base-image 或者 FUNC_BASE_IMAGE 指定
+	// 指定基础镜像,可以使用--base-image 或者 FUNC_BASE_IMAGE 指定(只有host模式可以使用)
 	cmd.Flags().StringP("base-image", "", f.Build.BaseImage,
 		"Override the base image for your function (host builder only)")
-	// 指定构建镜像名称,可以使用--image 或者 FUNC_IMAGE 指定
+	// 指定构建镜像名称,可以使用--image 或者 FUNC_IMAGE 指定(只有host模式可以使用)
 	cmd.Flags().StringP("image", "i", f.Image,
 		"Full image name in the form [registry]/[namespace]/[name]:[tag] (optional). This option takes precedence over --registry ($FUNC_IMAGE)")
 
@@ -184,7 +181,7 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 	// 设置上下文
 	cmd.SetContext(cfg.WithValues(cmd.Context()))
 
-	// 创建client
+	// 创建client(目前主要是选择builder)
 	clientOptions, err := cfg.clientOptions()
 	if err != nil {
 		return
@@ -367,20 +364,20 @@ func (c buildConfig) Prompt() (buildConfig, error) {
 	return c, err
 }
 
-// Validate the config passes an initial consistency check
+// Validate 校验配置
 func (c buildConfig) Validate() (err error) {
 	// Builder value must refer to a known builder short name
 	if err = ValidateBuilder(c.Builder); err != nil {
 		return
 	}
 
-	// Platform is only supported with the S2I builder at this time
+	// Platform 只支持 S2I 构建器
 	if c.Platform != "" && c.Builder != builders.S2I {
 		err = errors.New("only S2I builds currently support specifying platform")
 		return
 	}
 
-	// BaseImage is only supported with the host builder
+	// BaseImage 只支持 Host 构建器
 	if c.BaseImage != "" && c.Builder != "host" {
 		err = errors.New("only host builds support specifying the base image")
 	}
@@ -402,10 +399,13 @@ func (c buildConfig) Validate() (err error) {
 // TODO: As a further optimization, it might be ideal to only build the
 // image necessary for the target cluster, since the end product of  a function
 // deployment is not the contiainer, but rather the running service.
+
+// clientOptions 根据构建配置对象的当前状态返回适合实例化客户端的选项。
 func (c buildConfig) clientOptions() ([]fn.Option, error) {
 	o := []fn.Option{fn.WithRegistry(c.Registry)}
 	switch c.Builder {
 	case builders.Host:
+		// host构建器,使用标准OCI构建器,支持go和py。
 		t := newTransport(c.RegistryInsecure) // may provide a custom impl which proxies
 		creds := newCredentialsProvider(config.Dir(), t)
 		o = append(o,
@@ -415,12 +415,14 @@ func (c buildConfig) clientOptions() ([]fn.Option, error) {
 				oci.WithVerbose(c.Verbose))),
 		)
 	case builders.Pack:
+		// pack构建器,使用Buildpacks构建器,支持nodejs,typescript,go,python,quarkus,rust,springboot,但是需要docker或者podman
 		o = append(o,
 			fn.WithBuilder(pack.NewBuilder(
 				pack.WithName(builders.Pack),
 				pack.WithTimestamp(c.WithTimestamp),
 				pack.WithVerbose(c.Verbose))))
 	case builders.S2I:
+		// s2i构建器,使用S2I构建器,支持nodejs,typescript,go,python,quarkus,需要docker
 		o = append(o,
 			fn.WithBuilder(s2i.NewBuilder(
 				s2i.WithName(builders.S2I),
@@ -431,16 +433,15 @@ func (c buildConfig) clientOptions() ([]fn.Option, error) {
 	return o, nil
 }
 
-// buildOptions returns options for use with the client.Build request
+// buildOptions 构建参数
 func (c buildConfig) buildOptions() (oo []fn.BuildOption, err error) {
 	oo = []fn.BuildOption{}
 
-	// Platforms
-	//
-	// TODO: upgrade --platform to a multi-value field.  The individual builder
-	// implementations are responsible for bubbling an error if they do
-	// not support this.  Pack  supports none, S2I supports one, host builder
-	// supports multi.
+	// Platforms 可以升级为多值字段
+	// 各个构建器实现需要负责在其不支持此功能时抛出错误：
+	// Pack 构建器：不支持多平台（无）
+	// S2I 构建器：支持单平台（一个）
+	// Host 构建器：支持多平台（多个）
 	if c.Platform != "" {
 		parts := strings.Split(c.Platform, "/")
 		if len(parts) != 2 {

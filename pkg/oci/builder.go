@@ -1,25 +1,24 @@
 package oci
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
+	"os/exec"
+	slashpath "path"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
-
-	"archive/tar"
-	"compress/gzip"
-	"encoding/hex"
-	"encoding/json"
-	"io"
-	"io/fs"
-	"os/exec"
-	slashpath "path"
-	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -44,7 +43,7 @@ var defaultIgnored = []string{
 	".gitignore",
 }
 
-// OCI 构建器支持的语言
+// OCI 构建器支持的语言(根据key选择)
 var builders = map[string]languageBuilder{
 	"go":     goBuilder{},
 	"python": pythonBuilder{},
@@ -83,8 +82,8 @@ type Builder struct {
 	name    string // TODO: why is this used again?
 	verbose bool   // log verbosely
 
-	onDone func()          // For testing, an on done notification
-	impl   languageBuilder // For testing, an override for build impl
+	onDone func()          // 用于测试，完成通知
+	impl   languageBuilder // 用于测试，构建实现的覆盖
 }
 
 // NewBuilder creates a builder instance.
@@ -92,63 +91,61 @@ func NewBuilder(name string, verbose bool) *Builder {
 	return &Builder{name: name, verbose: verbose, onDone: func() {}}
 }
 
-// Build an OCI image of the given Function, wrapped in a service which
-// exposes the function as a network service.
-//
-// Platforms are optional and default to fn.DefaultPlatforms.
+// Build 构建一个OCI镜像的函数(类似docker打包)，包装在服务中，暴露接口作为网络服务。
+// 平台是可选的，默认为fn.DefaultPlatforms
+// "linux/amd64", "linux/arm64", "linux/arm/v7"
 func (b *Builder) Build(ctx context.Context, f fn.Function, pp []fn.Platform) (err error) {
+	// cmd中限制了只能使用默认的platform
 	if len(pp) == 0 {
-		pp = fn.DefaultPlatforms // Use Default platforms if not provided
+		pp = fn.DefaultPlatforms
 	}
 
-	job, err := newBuildJob(ctx, f, pp, b.verbose) // Create a new build job
+	// 1) 创建构建任务(根据语言选择构建器)
+	job, err := newBuildJob(ctx, f, pp, b.verbose)
 	if err != nil {
 		return
 	}
-
 	if b.impl != nil {
-		job.languageBuilder = b.impl // override builder if requested (tests)
+		// 自定义构建器,用于测试
+		job.languageBuilder = b.impl
 	}
 
-	if err = setup(job); err != nil { // create some directories etc
+	// 2) 设置构建环境(创建目录)
+	if err = setup(job); err != nil {
 		return
 	}
 	defer cleanup(job)
 
-	if err = scaffold(job); err != nil { // write out the service wrapper
+	// 3) 生成脚手架代码
+	if err = scaffold(job); err != nil {
 		return
 	}
 
-	if err = containerize(job); err != nil { // write image to .func/builds
+	// 4) 容器化,输出镜像到 .func/builds
+	if err = containerize(job); err != nil {
 		return
 	}
 
-	if err = updateLastLink(job); err != nil { // .func/builds/last
+	// 5) 更新最后一次构建的链接 .func/builds/last
+	if err = updateLastLink(job); err != nil {
 		return
 	}
 
-	b.onDone() // signal optional async done event listener (tests)
+	// 6) 通知可选的异步完成事件监听器（测试）
+	b.onDone()
 
+	// TODO: 目前通过无错误返回来传达构建完成状态的方式并不理想。系统需要依赖一个隐式约定：OCI镜像已经存在于当前进程的构建目录中。
 	return
-
-	// TODO: communicating build completeness throgh returning without error
-	// is suboptimal.  The system then relies on the implicit availability
-	// of the OCI image in this process' build directory
-	//
-	// It Would be better to have a defined build result object returned here
-	// which can be used to communicate details of the build to the pusher
-	// explicitly, such as where the image to be pushed can be found, rather
-	// than this implicit coupling.
 }
 
-// setup the build task prerequsites on the filesystem
+// setup 设置构建环境
 func setup(job buildJob) (err error) {
-	// Fail if another build is in progress
+	// 如果另一个构建正在进行，则失败
 	if job.isActive() {
 		return ErrBuildInProgress{job.buildDir()}
 	}
 
-	// Build directory
+	// 构建目录
 	if _, err = os.Stat(job.buildDir()); !os.IsNotExist(err) {
 		if job.verbose {
 			fmt.Fprintf(os.Stderr, "rm -rf %v\n", job.buildDir())
@@ -164,7 +161,7 @@ func setup(job buildJob) (err error) {
 		return
 	}
 
-	// PID links directory
+	// PID链接目录
 	if _, err = os.Stat(job.pidsDir()); os.IsNotExist(err) {
 		if job.verbose {
 			fmt.Fprintf(os.Stderr, "mkdir -p %v\n", job.pidsDir())
@@ -174,7 +171,7 @@ func setup(job buildJob) (err error) {
 		}
 	}
 
-	// Link to last build attempted (this)
+	// 链接到最后一次构建的尝试（这个）
 	target := filepath.Join("..", "by-hash", job.hash)
 	if job.verbose {
 		fmt.Fprintf(os.Stderr, "ln -s %v %v\n", target, job.pidLink())
@@ -183,19 +180,17 @@ func setup(job buildJob) (err error) {
 		return err
 	}
 
-	// Creates the blobs directory where layer data resides
-	// (compressed and hashed)
+	// 创建blob目录，层数据存储在这里(压缩和hash存储)
 	if err := os.MkdirAll(job.blobsDir(), os.ModePerm); err != nil {
 		return err
 	}
 
-	// Blob cache directory for shared base layers between builds.
-	// NOTE: may turn this into a system-global cache (if available) at
-	// XDG_CONFIG_HOME/func/image-cache, with this as a fallback:
-	// TODO: it's possible, though unlikely, this directory could
-	// grow unweildy under active development after rounds of changes to
-	// the used base layers.  We should have some way to truncate or otherwise
-	// mitigate this disk memory leak potential.
+	// 用于构建之间共享基础层的 Blob 缓存目录。
+	// 注意：可能会将其转换为系统全局缓存（如果可用），位于
+	// XDG_CONFIG_HOME/func/image-cache，当前实现作为后备方案：
+	// TODO：虽然不太可能，但在活跃开发过程中，经过多轮基础层更改后，
+	// 这个目录可能会变得难以管理。我们应该有某种方式来截断或
+	// 缓解这种潜在的磁盘内存泄漏问题。
 	if err := os.MkdirAll(job.cacheDir(), os.ModePerm); err != nil {
 		return err
 	}
@@ -203,9 +198,9 @@ func setup(job buildJob) (err error) {
 	return
 }
 
-// cleanup various filesystem artifacts of the build.
+// cleanup 清理构建的文件系统工件
 func cleanup(job buildJob) {
-	// cleanup orphaned build links
+	// 清理孤立的构建链接
 	dd, _ := os.ReadDir(job.pidsDir())
 	for _, d := range dd {
 		if processExists(d.Name()) {
@@ -218,9 +213,9 @@ func cleanup(job buildJob) {
 		_ = os.RemoveAll(dir)
 	}
 
-	// remove build file directories unless they are either:
+	// 删除构建文件目录，除非它们是：
 	// 1. The build files from the last successful build
-	// 2. Are associated with a pid link (currently in progress)
+	// 2. 与pid链接相关联（当前正在进行）
 	dd, _ = os.ReadDir(job.buildsDir())
 	for _, d := range dd {
 		dir := filepath.Join(job.buildsDir(), d.Name())
@@ -237,11 +232,9 @@ func cleanup(job buildJob) {
 	}
 }
 
-// scaffold writes out the process wrapper code which will instantiate the
-// Function and expose it as a service when included in the final container.
+// scaffold 写出进程包装代码，当包含在最终容器中时，将实例化函数并将其作为服务暴露。
 func scaffold(job buildJob) (err error) {
-	// extract the embedded filesystem which holds the scaffolding for
-	// the given runtime
+	// 提取嵌入的文件系统，其中包含给定运行时的 scaffolding
 	repo, err := fn.NewRepository("", "")
 	if err != nil {
 		return
@@ -253,86 +246,70 @@ func scaffold(job buildJob) (err error) {
 		job.function.Invoke, repo.FS())
 }
 
-// containerize the full service which consists of the scaffolded Function,
-// Function implementation, base image, data layers etc.
-// This container is stored on disk for later upload to the registry via
-// the configured pusher.
+// containerize 容器化整个服务，包括scaffolded函数、函数实现、基础镜像、数据层等。
 func containerize(job buildJob) error {
 	sharedLayers := []imageLayer{}
 
-	// Write out the static, required oci-layout file
 	if err := os.WriteFile(filepath.Join(job.ociDir(), "oci-layout"),
 		[]byte(`{ "imageLayoutVersion": "1.0.0" }`), os.ModePerm); err != nil {
 		return err
 	}
 
-	// Create the shared data layer, returning its metadata
-	data, err := writeDataLayer(job) // shared
+	// 1) 创建共享层
+	// - 数据层（源码）
+	data, err := writeDataLayer(job)
 	if err != nil {
 		return err
 	}
 	sharedLayers = append(sharedLayers, data)
 
-	// Create the shared root certificates layer, returning its metadata
+	// - 证书层
 	certs, err := writeCertsLayer(job) // shared
 	if err != nil {
 		return err
 	}
 	sharedLayers = append(sharedLayers, certs)
 
-	// Create any shared layers from the language-specific builder, returning
-	// their metadata.
+	// - 语言特定共享层（如Python依赖）
 	shared, err := job.languageBuilder.WriteShared(job)
 	if err != nil {
 		return err
 	}
 	sharedLayers = append(sharedLayers, shared...)
 
-	// Manifests are the metadata for individual platform-specific images
-	// are used to create the final multi-arch image.
+	// 2) 为每个平台创建镜像
 	manifests := []v1.Descriptor{}
-
-	// For each platform, create a new slice of layers consisting of first
-	// the shared layers followed by newly-generated platform-specific layers
-	// for each platform.  Bundle these into a new image manifest for inclusion
-	// in the final container.
 	for _, p := range job.platforms {
-
-		// Write out the platform-specific layers, returning their metadata.
+		// 创建平台特定层(根据语言来决定平台特定层的内容)
 		platformSpecificLayers, err := job.languageBuilder.WritePlatform(job, p)
 		if err != nil {
 			return err
 		}
 		layers := append(sharedLayers, platformSpecificLayers...)
 
-		// Fetch the base image if specified.
-		// base layers are added to blobs (and cached)
+		// 拉取基础镜像(使用go-containerregistry)
 		base, err := pullBase(job, p)
 		if err != nil {
 			return err
 		}
 
-		// Create a config file which describes this platform image.
+		// 创建配置文件
 		configFile, err := newConfigFile(job, p, base, layers)
 		if err != nil {
 			return err
 		}
-
-		// Allow the languageBuilder to do any additional config such as
-		// setting the platform image's command, adding environment vars etc.
 		configFile, err = job.languageBuilder.Configure(job, p, configFile)
 		if err != nil {
 			return err
 		}
 
-		// Write out the config for the platform image, returning its metadata
+		// 写入配置
 		config, err := writeConfig(job, configFile)
 		if err != nil {
 			return err
 		}
 
-		// Create the image, returning its descriptor for inclusin in the
-		// final container config.
+		// 创建manifests清单
 		manifest, err := writeManifest(job, p, base, config, layers)
 		if err != nil {
 			return err
@@ -340,33 +317,49 @@ func containerize(job buildJob) error {
 		manifests = append(manifests, manifest)
 	}
 
-	// Image Index which enumerates all images via manifests
+	// 3) 创建镜像索引
+
+	/*
+		.func/builds/by-hash/{hash}/
+		├── oci/
+		│   ├── oci-layout          # OCI布局文件
+		│   ├── index.json          # 镜像索引
+		│   └── blobs/sha256/       # 所有层和配置的blob
+		│       ├── {digest1}       # 数据层
+		│       ├── {digest2}       # 证书层
+		│       ├── {digest3}       # 语言层
+		│       └── {digest4}       # 配置文件
+		├── result/                 # 编译结果
+		│   └── f.linux.amd64      # Go二进制文件
+		└── service/               # 脚手架代码
+		    └── main.py            # Python服务包装器
+	*/
+
 	return writeIndex(job, manifests)
 }
 
-// writeDataLayer creates the shared data layer in the container file hierarchy and
-// returns both its descriptor and layer metadata.
+// writeDataLayer 将源码打包成tar.gz(数据层)
 func writeDataLayer(job buildJob) (layer imageLayer, err error) {
-	// Create the data tarball
-	// TODO: try WithCompressedCaching?
-	source := job.function.Root // The source is the function's entire filesystem
+	// 创建根目录
+	source := job.function.Root
 	target := filepath.Join(job.buildDir(), "datalayer.tar.gz")
 
+	// 创建源码压缩包，排除 .git, .func 等文件
 	if err = newDataTarball(source, target, defaultIgnored, job.verbose); err != nil {
 		return
 	}
 
-	// Layer
+	// 转换为OCI层
 	if layer.Layer, err = tarball.LayerFromFile(target); err != nil {
 		return
 	}
 
-	// Descriptor
+	// 生成描述符
 	if layer.Descriptor, err = newDescriptor(layer.Layer); err != nil {
 		return
 	}
 
-	// Blob
+	// 移动到blobs目录
 	blob := filepath.Join(job.blobsDir(), layer.Descriptor.Digest.Hex)
 	if job.verbose {
 		fmt.Fprintf(os.Stderr, "mv %v %v\n", rel(job.buildDir(), target), rel(job.buildDir(), blob))
@@ -478,30 +471,28 @@ func validatedLinkTarget(root, path string) (tgt string, err error) {
 	return
 }
 
-// newCertLayer creates the shared data layer in the container file hierarchy and
-// returns both its descriptor and layer metadata.
+// writeCertsLayer 创建证书层
 func writeCertsLayer(job buildJob) (layer imageLayer, err error) {
-
-	// Create the data tarball
-	// TODO: try WithCompressedCaching?
+	// 创建证书压缩包
 	source := filepath.Join(job.buildDir(), "ca-certificates.crt")
 	target := filepath.Join(job.buildDir(), "certslayer.tar.gz")
 
+	// 创建根目录
 	if err = newCertsTarball(source, target, job.verbose); err != nil {
 		return
 	}
 
-	// Layer
+	// 转换为OCI层
 	if layer.Layer, err = tarball.LayerFromFile(target); err != nil {
 		return
 	}
 
-	// Descriptor
+	// 生成描述符
 	if layer.Descriptor, err = newDescriptor(layer.Layer); err != nil {
 		return
 	}
 
-	// Blob
+	// 移动到blobs目录
 	blob := filepath.Join(job.blobsDir(), layer.Descriptor.Digest.Hex)
 	if job.verbose {
 		fmt.Fprintf(os.Stderr, "mv %v %v\n", rel(job.buildDir(), target), rel(job.buildDir(), blob))
@@ -523,6 +514,7 @@ func newCertsTarball(source, target string, verbose bool) error {
 	tw := tar.NewWriter(gw)
 	defer tw.Close()
 
+	// 将系统证书复制到容器中的标准位置
 	paths := []string{
 		"/etc/ssl/certs/ca-certificates.crt",
 		"/etc/pki/tls/certs/ca-certificates.crt",
@@ -564,35 +556,34 @@ func newCertsTarball(source, target string, verbose bool) error {
 	return nil
 }
 
-// pullBase image returns the descriptor to a remote image for the given
-// platform if a base image was specified for this builder.
-// Its layers are automatically downloaded into the local cache if this is
-// the first fetch and their blobs linked into the final OCI image.
+// pullBase 拉取基础镜像
+// 如果构建器指定了基础镜像，则返回给定平台的远程镜像的描述符。
+// 如果这是第一次获取，则自动下载其层到本地缓存，并将其blob链接到最终的OCI镜像。
 func pullBase(job buildJob, p v1.Platform) (image v1.Image, err error) {
 	baseImage := job.function.Build.BaseImage
 	if job.languageBuilder.Base(baseImage) == "" {
-		return // FROM SCRATCH
+		return // 从头开始构建
 	}
 
-	// Parse the base into a reference
+	// 1) 解析镜像引用
 	ref, err := name.ParseReference(job.languageBuilder.Base(baseImage))
 	if err != nil {
 		return
 	}
 
-	// Get the remote descriptor referenced
+	// 2) 拉取远程镜像(依赖OCI的默认认证支持)
+	// 读取docker的配置文件 ~/.docker/config.json
 	desc, err := remote.Get(ref, remote.WithPlatform(p))
 	if err != nil {
 		return
 	}
 
-	// Get the image described, either directly or via platform dereference
-	// from an index:
+	// 3) 获取镜像描述符，直接或通过平台索引
 	if image, err = desc.Image(); err != nil {
 		return
 	}
 
-	// Write the image's layer data into the OCI blobs (caching)
+	// 4) 环境基础镜像层
 	layers, err := image.Layers()
 	if err != nil {
 		return
@@ -668,6 +659,7 @@ func ensureCached(job buildJob, layer v1.Layer) (err error) {
 }
 
 func newConfigFile(job buildJob, p v1.Platform, base v1.Image, imageLayers []imageLayer) (cfg v1.ConfigFile, err error) {
+	// 配置文件
 	cfg = v1.ConfigFile{
 		Created:      v1.Time{Time: job.start},
 		Architecture: p.Architecture,
@@ -898,7 +890,7 @@ func newBuildJob(ctx context.Context, f fn.Function, pp []fn.Platform, verbose b
 		return job, fmt.Errorf("error calculating fingerprint for build. %w", err)
 	}
 
-	// Get the builder registered for this language
+	// 根据语言选择构建器
 	var ok bool
 	if job.languageBuilder, ok = builders[f.Runtime]; !ok {
 		return job, fmt.Errorf("%v functions are not yet supported by the host builder", f.Runtime)
