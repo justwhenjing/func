@@ -121,7 +121,7 @@ func (b *Builder) Build(ctx context.Context, f fn.Function, pp []fn.Platform) (e
 		return
 	}
 
-	// 4) 容器化,输出镜像到 .func/builds
+	// 4) 容器化
 	if err = containerize(job); err != nil {
 		return
 	}
@@ -134,7 +134,9 @@ func (b *Builder) Build(ctx context.Context, f fn.Function, pp []fn.Platform) (e
 	// 6) 通知可选的异步完成事件监听器（测试）
 	b.onDone()
 
-	// TODO: 目前通过无错误返回来传达构建完成状态的方式并不理想。系统需要依赖一个隐式约定：OCI镜像已经存在于当前进程的构建目录中。
+	// TODO: 需要使用skopeo转换为镜像(podman)
+	// ./skopeo copy oci:cnf-config/.func/builds/last/oci containers-storage:swr:2512/knative/cnf-config:latest
+
 	return
 }
 
@@ -282,7 +284,7 @@ func containerize(job buildJob) error {
 	}
 	sharedLayers = append(sharedLayers, shared...)
 
-	// 2) 为每个平台创建镜像
+	// 2) 为每个平台创建镜像(这里转换为镜像需要只能是一个平台的)
 	manifests := []v1.Descriptor{}
 	for _, p := range job.platforms {
 		// 创建平台特定层(根据语言来决定平台特定层的内容)
@@ -569,6 +571,8 @@ func pullBase(job buildJob, p v1.Platform) (image v1.Image, err error) {
 	if job.languageBuilder.Base(baseImage) == "" {
 		return // 从头开始构建
 	}
+
+	// TODO 可以增加选项,不拉取基础镜像
 
 	// 1) 解析镜像引用
 	ref, err := name.ParseReference(job.languageBuilder.Base(baseImage))

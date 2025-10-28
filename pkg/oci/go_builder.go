@@ -25,6 +25,7 @@ func (b goBuilder) Base(customImage string) string {
 
 func (b goBuilder) Configure(_ buildJob, _ v1.Platform, cf v1.ConfigFile) (v1.ConfigFile, error) {
 	// 使用Cmd而不是Entrypoint，因为Cmd可以被覆盖
+	// 二进制文件放入 /func 目录中,直接执行
 	cf.Config.Cmd = []string{"/func/f"}
 	cf.Config.Env = append(cf.Config.Env, "LISTEN_ADDRESS=[::]:8080")
 	return cf, nil

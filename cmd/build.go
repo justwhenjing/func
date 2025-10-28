@@ -371,9 +371,10 @@ func (c buildConfig) Validate() (err error) {
 		return
 	}
 
-	// Platform 只支持 S2I 构建器
-	if c.Platform != "" && c.Builder != builders.S2I {
-		err = errors.New("only S2I builds currently support specifying platform")
+	// Platform 只支持 S2I 构建器设置Platform
+	// TODO 修改一下 host 和 s2i都支持platform
+	if c.Platform != "" && c.Builder == builders.Pack {
+		err = errors.New("only pack builds not support specifying platform")
 		return
 	}
 
