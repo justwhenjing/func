@@ -189,7 +189,7 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, clientOptions...)
 	defer done()
 
-	// 构建
+	// 构建选项
 	buildOptions, err := cfg.buildOptions()
 	if err != nil {
 		return

@@ -239,6 +239,11 @@ func scaffold(job buildJob) (err error) {
 	if err != nil {
 		return
 	}
+
+	if job.verbose {
+		fmt.Fprintf(os.Stderr, "Scaffolding to %v\n", job.buildDir())
+	}
+
 	return scaffolding.Write(
 		job.buildDir(),       // desintation for scaffolding
 		job.function.Root,    // source to be scaffolded

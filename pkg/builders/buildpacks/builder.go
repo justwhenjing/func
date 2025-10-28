@@ -153,7 +153,8 @@ func (b *Builder) Build(ctx context.Context, f fn.Function, platforms []fn.Platf
 		}
 		excludes = strings.Split(buf.String(), "\n")
 	}
-	// Pack build options
+
+	// pack模式选项
 	opts := pack.BuildOptions{
 		GroupID:        -1,
 		UserID:         -1,
@@ -162,7 +163,7 @@ func (b *Builder) Build(ctx context.Context, f fn.Function, platforms []fn.Platf
 		LifecycleImage: DefaultLifecycleImage,
 		Builder:        image,
 		Buildpacks:     buildpacks,
-		PullPolicy:     packimage.PullNever,
+		PullPolicy:     packimage.PullNever, // 编译镜像拉取策略: 从不拉取
 		ProjectDescriptor: types.Descriptor{
 			Build: types.Build{
 				Exclude: excludes,

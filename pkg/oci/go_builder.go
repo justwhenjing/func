@@ -41,7 +41,7 @@ func (b goBuilder) WritePlatform(cfg buildJob, p v1.Platform) (layers []imageLay
 	var layer v1.Layer
 
 	// 1) 交叉编译
-	exe, err := goBuild(cfg, p) // Compile binary returning its path
+	exe, err := goBuild(cfg, p)
 	if err != nil {
 		return
 	}
@@ -90,43 +90,31 @@ func goBuild(cfg buildJob, p v1.Platform) (binPath string, err error) {
 		fmt.Printf("   %v\n", filepath.Base(outpath))
 	}
 
+	// 执行go mod tidy
 	cmd := exec.CommandContext(cfg.ctx, gobin, "mod", "tidy")
+	cmd.Env = envs
+	cmd.Dir = cfg.buildDir()
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	if err = cmd.Run(); err != nil {
+		return "", fmt.Errorf("go mod tidy failed: %w", err)
+	}
+
+	// 执行go build
+	cmd = exec.CommandContext(cfg.ctx, gobin, args...)
 	cmd.Env = envs
 	cmd.Dir = cfg.buildDir()
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	err = cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("cannot sync deps: %w", err)
+		return "", fmt.Errorf("go build failed: %w", err)
 	}
 
-	// Build the function
-	cmd = exec.CommandContext(cfg.ctx, gobin, args...)
-	cmd.Env = envs
-	cmd.Dir = cfg.buildDir()
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	return outpath, cmd.Run()
+	return outpath, nil
 }
 
 func goBuildCmd(p v1.Platform, cfg buildJob) (gobin string, args []string, outpath string, err error) {
-	/* TODO:  Use Build Command override from the function if provided
-	 * A future PR will include the ability to specify a
-	 * f.Build.BuildCommand, or BuildArgs for use here to customize
-	 * This will be useful when, for example, the function is written in
-	 *	Go and the function developer needs Libc compatibility, in which case
-	 *	the default command will need to be replaced with:
-	 *	go build -ldflags "-linkmode 'external' -extldflags '-static'"
-	 *  Pseudocode:
-	 *  if BuildArgs or BuildCommand
-	 *    Validate command or args are safe to run
-	 *      no other commands injected
-	 *      does not contain Go's "toolexec"
-	 *      does not specify the output path
-	 *    Either replace or append to gobin
-	 */
-
 	// Use the binary specified FUNC_GO if defined
 	gobin = os.Getenv("FUNC_GO") // TODO: move to main and plumb through
 	if gobin == "" {
@@ -138,9 +126,10 @@ func goBuildCmd(p v1.Platform, cfg buildJob) (gobin string, args []string, outpa
 	if p.Variant != "" {
 		name = name + "." + p.Variant
 	}
-	outpath = filepath.Join(cfg.buildDir(), "result", name)
+	outpath = filepath.Join("result", name)
 	args = []string{"build", "-o", outpath}
-	return gobin, args, outpath, nil
+	// TODO 此处有问题(在buildDir下执行,使用result相对路径,但是结果路径需要增加buildDir前缀)
+	return gobin, args, filepath.Join(cfg.buildDir(), outpath), nil
 }
 
 func goBuildEnvs(p v1.Platform) (envs []string) {

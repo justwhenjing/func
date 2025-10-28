@@ -92,12 +92,11 @@ func Write(out, src, runtime, invoke string, fs filesystem.Filesystem) (err erro
 		return ScaffoldingError{"certs copy failed", err}
 	}
 
-	// Replace the 'f' link of the scaffolding (which is now incorrect) to
-	// link to the function's root.
 	rel, err := filepath.Rel(out, src)
 	if err != nil {
 		return ScaffoldingError{"error determining relative path to function source", err}
 	}
+	// 先删除原有链接,在创建新链接
 	link := filepath.Join(out, "f")
 	_ = os.Remove(link)
 	if err = os.Symlink(rel, link); err != nil {

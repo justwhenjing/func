@@ -11,6 +11,7 @@ import (
 // 主要作用: 将templates目录下的文件打包成一个zip文件，并将其存储在generate.TemplatesZip变量中。
 // 然后通过newEmbeddedTemplatesFS函数将这个zip文件加载到内存中，并返回一个filesystem.Filesystem接口的实现。
 // 这个实现可以被用于访问templates目录下的文件。
+// 需要先执行 generate/zz_filesystem_generated.go
 
 //go:generate go run ../../generate/templates/main.go
 
