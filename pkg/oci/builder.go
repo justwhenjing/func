@@ -566,9 +566,7 @@ func newCertsTarball(source, target string, verbose bool) error {
 	return nil
 }
 
-// pullBase 拉取基础镜像
-// 如果构建器指定了基础镜像，则返回给定平台的远程镜像的描述符。
-// 如果这是第一次获取，则自动下载其层到本地缓存，并将其blob链接到最终的OCI镜像。
+// pullBase 拉取运行基础镜像(最好设置)
 func pullBase(job buildJob, p v1.Platform) (image v1.Image, err error) {
 	baseImage := job.function.Build.BaseImage
 	if job.languageBuilder.Base(baseImage) == "" {
@@ -1142,8 +1140,12 @@ func buildImage(f fn.Function, job buildJob) error {
 		return fmt.Errorf("writing to daemon failed: %v", err)
 	}
 
-	// 可选？保存成build
-	if err := tarball.WriteToFile(job.localImagePath(), nil, image); err != nil {
+	// 保存镜像文件
+	ref, err := name.ParseReference(f.Build.Image)
+	if err != nil {
+		return err
+	}
+	if err := tarball.WriteToFile(job.localImagePath(), ref, image); err != nil {
 		return err
 	}
 	fmt.Printf("Save built image: '%s' at local path: '%s'\n", f.Build.Image, job.localImagePath())
