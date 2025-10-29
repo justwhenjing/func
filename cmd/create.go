@@ -126,8 +126,6 @@ func runCreate(cmd *cobra.Command, args []string, newClient ClientFactory) (err 
 		fn.WithRepository(cfg.Repository))
 	defer done()
 
-	// Validate - a deeper validation than that which is performed when
-	// instantiating the client with the raw config above.
 	if err = cfg.Validate(client); err != nil {
 		return
 	}
@@ -254,37 +252,15 @@ func singleCommand(cmd *cobra.Command, args []string, cfg createConfig) string {
 	return b.String()
 }
 
-// Validate the current state of the config, returning any errors.
-// Note this is a deeper validation using a client already configured with a
-// preliminary config object from flags/config, such that the client instance
-// can be used to determine possible values for runtime, templates, etc.  a
-// pre-client validation should not be required, as the Client does its own
-// validation.
+// Validate 校验配置
 func (c createConfig) Validate(client *fn.Client) (err error) {
-
-	// Confirm Name is valid
-	// Note that this is highly constricted, as it must currently adhere to the
-	// naming of a Knative Service, which itself is constrained to a Kubernetes
-	// Service, which itself is constrained to a DNS label (a subdomain).
-	// TODO: refactor to be git-like with no name at time of creation, but rather
-	// with named deployment targets in a one-to-many configuration.
+	// 验证函数名称。这里的函数名需要符合k8s service 命名规范
 	dirName, _ := deriveNameAndAbsolutePathFromPath(c.Path)
 	if err = utils.ValidateFunctionName(dirName); err != nil {
 		return
 	}
 
-	// Validate Runtime and Template Name
-	//
-	// Perhaps additional validation would be of use here in the CLI, but
-	// the client libray itself is ultimately responsible for validating all input
-	// prior to exeuting any requests.
-	// Client validates both language runtime and template exist, with language runtime
-	// being a mandatory flag while defaulting template if not present to 'http'.
-	// However, if either of them are invalid, or the chosen combination does not exist,
-	// the error message is a rather terse one-liner. This is suitable for libraries, but
-	// for a CLI it behooves us to be more verbose, including valid options for
-	// each.  So here, we check that the values entered (if any) are both valid
-	// and valid together.
+	// 验证language
 	if c.Runtime == "" {
 		return noRuntimeError(client)
 	}
@@ -293,6 +269,7 @@ func (c createConfig) Validate(client *fn.Client) (err error) {
 		return newInvalidRuntimeError(client, c.Runtime)
 	}
 
+	// 验证template。只能是http或者cloudevents
 	if c.Template != "" && c.Repository == "" &&
 		!isValidTemplate(client, c.Runtime, c.Template) {
 		return newInvalidTemplateError(client, c.Runtime, c.Template)

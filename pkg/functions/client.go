@@ -592,8 +592,7 @@ func (c *Client) Init(cfg Function) (Function, error) {
 		return f, err
 	}
 
-	// Mark the function as having been created, and that it is not to be
-	// considered built.
+	// 创建 func.yaml 文件
 	f.Created = time.Now()
 	err = f.Write()
 	if err != nil {

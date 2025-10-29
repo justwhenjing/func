@@ -136,7 +136,7 @@ func (b *Builder) Build(ctx context.Context, f fn.Function, platforms []fn.Platf
 		buildpacks = defaultBuildpacks[f.Runtime]
 	}
 
-	// Reading .funcignore file
+	// 读取 .funcignore 文件
 	var excludes []string
 	filePath := filepath.Join(f.Root, ".funcignore")
 	file, err := os.Open(filePath)
