@@ -183,9 +183,6 @@ func newCreateConfig(cmd *cobra.Command, args []string, newClient ClientFactory)
 		path = args[0]
 	}
 
-	// Convert the path to an absolute path, and extract the ending directory name
-	// as the function name. TODO: refactor to be git-like with no name up-front
-	// and set instead as a named one-to-many deploy target.
 	// 使用空格分割,提取最后一个信息作为工作路径,并且转换为绝对路径
 	// 使用目录名作为函数名
 	// 最后一个为 a/b,则函数名为b,工作路径为 a/b 的绝对路径

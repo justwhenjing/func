@@ -20,8 +20,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buildpacks/imgutil/layout"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
@@ -131,12 +133,13 @@ func (b *Builder) Build(ctx context.Context, f fn.Function, pp []fn.Platform) (e
 		return
 	}
 
-	// 6) 通知可选的异步完成事件监听器（测试）
+	// 6) 构建镜像(使用DOCKER_HOST对应的镜像仓库,可自行修改)
+	if err = buildImage(f, job); err != nil {
+		return
+	}
+
+	// 7) 通知可选的异步完成事件监听器（测试）
 	b.onDone()
-
-	// TODO: 需要使用skopeo转换为镜像(podman)
-	// ./skopeo copy oci:cnf-config/.func/builds/last/oci containers-storage:swr:2512/knative/cnf-config:latest
-
 	return
 }
 
@@ -758,6 +761,7 @@ func newConfigEnvs(job buildJob) []string {
 	envs = append(envs, "FUNC_CREATED="+job.start.Format(time.RFC3339))
 
 	// FUNC_VERSION
+	// TODO 需要改进
 	// If source controlled, and if being built from a system with git, the
 	// environment FUNC_VERSION will be populated.  Otherwise it will exist
 	// (to indicate this logic was executed) but have an empty value.
@@ -934,6 +938,10 @@ func (j buildJob) cacheDir() string {
 	return filepath.Join(j.function.Root, fn.RunDataDir, "blob-cache")
 }
 
+func (j *buildJob) localImagePath() string {
+	return filepath.Join(j.function.Root, fn.RunDataDir, "image.tar")
+}
+
 // isActive returns false if an active build for this Function is detected.
 func (j buildJob) isActive() bool {
 	dd, _ := os.ReadDir(j.pidsDir())
@@ -1093,4 +1101,51 @@ func writeAsJSONBlob(job buildJob, tempName string, data any) (desc v1.Descripto
 		Digest: hash,
 		Size:   size,
 	}, nil
+}
+
+// buildImage 构建镜像
+func buildImage(f fn.Function, job buildJob) error {
+	// 读取oci布局
+	img, err := layout.FromPath(filepath.Join(job.lastLink(), "oci"))
+	if err != nil {
+		return err
+	}
+
+	// 解析tag
+	tag, err := name.NewTag(f.Build.Image)
+	if err != nil {
+		return err
+	}
+
+	// 读取索引
+	index, err := img.ImageIndex()
+	if err != nil {
+		return err
+	}
+
+	// 读取manifests信息
+	manifest, err := index.IndexManifest()
+	if err != nil {
+		return fmt.Errorf("et index manifest failed: %v", err)
+	}
+	if len(manifest.Manifests) < 1 {
+		return fmt.Errorf("no manifests found in index")
+	}
+
+	// 写入docker daemon(可以通过修改DOCKER_HOST来指定不同的运行时)
+	// 取第一个manifests信息
+	image, err := img.Image(manifest.Manifests[0].Digest)
+	if err != nil {
+		return err
+	}
+	if _, err := daemon.Write(tag, image); err != nil {
+		return fmt.Errorf("writing to daemon failed: %v", err)
+	}
+
+	// 可选？保存成build
+	if err := tarball.WriteToFile(job.localImagePath(), nil, image); err != nil {
+		return err
+	}
+	fmt.Printf("Save built image: '%s' at local path: '%s'\n", f.Build.Image, job.localImagePath())
+	return nil
 }

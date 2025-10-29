@@ -776,10 +776,6 @@ func (f Function) WriteRuntimeBuiltImage(verbose bool) error {
 		return nil
 	}
 
-	if verbose {
-		fmt.Printf("Writing built image: '%s' at path: '%s'\n", f.Build.Image, path)
-	}
-
 	return os.WriteFile(path, []byte(f.Build.Image), os.ModePerm)
 }
 
