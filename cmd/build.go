@@ -9,7 +9,6 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/ory/viper"
 	"github.com/spf13/cobra"
-
 	"knative.dev/func/pkg/builders"
 	pack "knative.dev/func/pkg/builders/buildpacks"
 	"knative.dev/func/pkg/builders/s2i"
@@ -108,7 +107,7 @@ EXAMPLES
 	// 指定构建器镜像,用于分阶段构建,可以使用--builder-image 或者 FUNC_BUILDER_IMAGE 指定
 	cmd.Flags().StringP("builder-image", "", builderImage,
 		"Specify a custom builder image for use by the builder other than its default. ($FUNC_BUILDER_IMAGE)")
-	// 指定基础镜像,可以使用--base-image 或者 FUNC_BASE_IMAGE 指定(只有host模式可以使用)
+    // 指定基础镜像,可以使用--base-image 或者 FUNC_BASE_IMAGE 指定(只有host模式可以使用)
 	cmd.Flags().StringP("base-image", "", f.Build.BaseImage,
 		"Override the base image for your function (host builder only)")
 	// 指定构建镜像名称,可以使用--image 或者 FUNC_IMAGE 指定(只有host模式可以使用)
@@ -158,12 +157,53 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 	)
 
 	// 收集配置
-	if cfg, err = newBuildConfig().Prompt(); err != nil {
+	if cfg, err = newBuildConfig().Prompt(); err != nil { // gather values into a single instruction set
+		// Layer 2: Catch technical errors and provide CLI-specific user-friendly messages
+
+		// Check if it's a "not initialized" error (no function found)
+		var errNotInit *fn.ErrNotInitialized
+		if errors.As(err, &errNotInit) {
+			return wrapNotInitializedError(err, "build")
+		}
+
+		// Check if it's a registry required error (function exists but no registry)
+		if errors.Is(err, fn.ErrRegistryRequired) {
+			return wrapRegistryRequiredError(err, "build")
+		}
 		return
 	}
 
 	// 验证配置
-	if err = cfg.Validate(); err != nil {
+	if err = cfg.Validate(cmd); err != nil { // Perform any pre-validation
+		// Layer 2: Catch technical errors and provide CLI-specific user-friendly messages
+		if errors.Is(err, fn.ErrConflictingImageAndRegistry) {
+			return fmt.Errorf(`%w
+
+Cannot use both --image and --registry together. Choose one:
+
+  Use --image for complete image name:
+    func build --image example.com/user/myfunc
+
+  Use --registry for automatic naming:
+    func build --registry example.com/user
+
+Note: FUNC_REGISTRY environment variable doesn't conflict with --image flag
+
+For more options, run 'func build --help'`, err)
+		}
+		if errors.Is(err, fn.ErrPlatformNotSupported) {
+			return fmt.Errorf(`%w
+
+The --platform flag is only supported with the S2I builder.
+
+Try this:
+  func build --registry <registry> --builder=s2i --platform linux/amd64
+
+Or remove the --platform flag:
+  func build --registry <registry>
+
+For more options, run 'func build --help'`, err)
+		}
 		return
 	}
 
@@ -306,10 +346,6 @@ func (c buildConfig) Configure(f fn.Function) fn.Function {
 // Skipped if not in an interactive terminal (non-TTY), or if --confirm false (agree to
 // all prompts) was set (default).
 func (c buildConfig) Prompt() (buildConfig, error) {
-	if !interactiveTerminal() {
-		return c, nil
-	}
-
 	// If there is no registry nor explicit image name defined, the
 	// Registry prompt is shown whether or not we are in confirm mode.
 	// Otherwise, it is only showin if in confirm mode
@@ -321,7 +357,19 @@ func (c buildConfig) Prompt() (buildConfig, error) {
 	if err != nil {
 		return c, err
 	}
-	if (f.Registry == "" && c.Registry == "" && c.Image == "") || c.Confirm {
+
+	// Check if function exists first
+	if !f.Initialized() {
+		// Return a specific error for uninitialized function
+		return c, fn.NewErrNotInitialized(f.Root)
+	}
+
+	if !interactiveTerminal() {
+		return c, nil
+	}
+
+	// If function IS initialized AND registry/image is missing
+	if f.Registry == "" && c.Registry == "" && c.Image == "" {
 		fmt.Println("A registry for function images is required. For example, 'docker.io/tigerteam'.")
 		err := survey.AskOne(
 			&survey.Input{Message: "Registry for function images:", Default: c.Registry},
@@ -333,11 +381,11 @@ func (c buildConfig) Prompt() (buildConfig, error) {
 		fmt.Println("Note: building a function the first time will take longer than subsequent builds")
 	}
 
-	// Remainder of prompts are optional and only shown if in --confirm mode
 	if !c.Confirm {
 		return c, nil
 	}
 
+	// Remainder of prompts are optional and only shown if in --confirm mode
 	// Image Name Override
 	// Calculate a better image name message which shows the value of the final
 	// image name as it will be calculated if an explicit image name is not used.
@@ -365,23 +413,30 @@ func (c buildConfig) Prompt() (buildConfig, error) {
 }
 
 // Validate 校验配置
-func (c buildConfig) Validate() (err error) {
+func (c buildConfig) Validate(cmd *cobra.Command) (err error) {
 	// Builder value must refer to a known builder short name
 	if err = ValidateBuilder(c.Builder); err != nil {
 		return
 	}
 
-	// Platform 只支持 S2I 构建器设置Platform
-	// TODO 修改一下 host 和 s2i都支持platform
-	if c.Platform != "" && c.Builder == builders.Pack {
-		err = errors.New("only pack builds not support specifying platform")
-		return
+	switch c.Builder {
+	case builders.Host:
+	case builders.Pack:
+		// Pack模式不支持指定基础镜像
+		// TODO: 由于这里会从func.yaml中取默认值,如果前面用host模式,后续使用pack模式构建,如果不设置baseimage="",此时会取到上一次的操作结果,从而报错
+		if c.BaseImage != "" {
+			err = errors.New("only host builds support specifying the base image")
+		}
+	case builders.S2I:
+		// S2I模式不支持指定平台和基础镜像
+		if c.Platform != "" {
+			err = errors.New("only s2i builds support specifying platform")
+		}
+		if c.BaseImage != "" {
+			err = errors.New("only s2i builds support specifying the base image")
+		}
 	}
 
-	// BaseImage 只支持 Host 构建器
-	if c.BaseImage != "" && c.Builder != "host" {
-		err = errors.New("only host builds support specifying the base image")
-	}
 	return
 }
 
@@ -412,6 +467,7 @@ func (c buildConfig) clientOptions() ([]fn.Option, error) {
 		o = append(o,
 			fn.WithBuilder(oci.NewBuilder(builders.Host, c.Verbose)),
 			fn.WithPusher(oci.NewPusher(c.RegistryInsecure, false, c.Verbose,
+				oci.WithTransport(newTransport(c.RegistryInsecure)),
 				oci.WithCredentialsProvider(creds),
 				oci.WithVerbose(c.Verbose))),
 		)

@@ -2,7 +2,6 @@ package oci
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
@@ -41,6 +40,8 @@ type Pusher struct {
 
 	updates chan v1.Update
 	done    chan bool
+
+	transport http.RoundTripper
 }
 
 func EmptyCredentialsProvider(ctx context.Context, registry string) (Credentials, error) {
@@ -59,6 +60,12 @@ func WithVerbose(verbose bool) Opt {
 	}
 }
 
+func WithTransport(transport http.RoundTripper) Opt {
+	return func(pusher *Pusher) {
+		pusher.transport = transport
+	}
+}
+
 func NewPusher(insecure, anon, verbose bool, opts ...Opt) *Pusher {
 	result := &Pusher{
 		credentialsProvider: EmptyCredentialsProvider,
@@ -67,6 +74,7 @@ func NewPusher(insecure, anon, verbose bool, opts ...Opt) *Pusher {
 		Verbose:             verbose,
 		updates:             make(chan v1.Update, 10),
 		done:                make(chan bool, 1),
+		transport:           remote.DefaultTransport,
 	}
 	for _, opt := range opts {
 		opt(result)
@@ -156,23 +164,13 @@ func (p *Pusher) writeIndex(ctx context.Context, ref name.Reference, ii v1.Image
 	oo := []remote.Option{
 		remote.WithContext(ctx),
 		remote.WithProgress(p.updates),
-	}
-
-	if p.Insecure {
-		t := remote.DefaultTransport.(*http.Transport).Clone()
-		t.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true,
-		}
-		oo = append(oo, remote.WithTransport(t))
+		remote.WithTransport(p.transport),
 	}
 
 	if !p.Anonymous {
 		a, err := p.authOption(ctx, creds)
 		if err != nil {
 			return err
-		}
-		if a == nil {
-			return errors.New("no authentication option provided")
 		}
 		oo = append(oo, a)
 	}
@@ -209,5 +207,6 @@ func (p *Pusher) authOption(ctx context.Context, creds Credentials) (remote.Opti
 		return remote.WithAuth(&authn.Basic{Username: creds.Username, Password: creds.Password}), nil
 	}
 
-	return nil, nil
+	// Return anonymous auth when no credentials are provided (e.g., for localhost registries)
+	return remote.WithAuth(authn.Anonymous), nil
 }

@@ -81,7 +81,7 @@ check: $(BIN_GOLANGCI_LINT) ## Check code quality (lint)
 	cd test && $(BIN_GOLANGCI_LINT) run --timeout 300s
 
 $(BIN_GOLANGCI_LINT):
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./bin v2.0.2
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./bin v2.5.0
 
 .PHONY: generate/zz_filesystem_generated.go
 generate/zz_filesystem_generated.go: clean_templates
@@ -143,7 +143,7 @@ check-embedded-fs: ## Check the embedded templates FS
 
 # TODO: add linters for other templates
 .PHONY: check-templates
-check-templates: check-go check-rust ## Run template source code checks
+check-templates: check-go check-rust check-typescript ## Run template source code checks
 
 .PHONY: check-go
 check-go: ## Check Go templates' source
@@ -156,6 +156,11 @@ check-go: ## Check Go templates' source
 check-rust: ## Check Rust templates' source
 	cd templates/rust/cloudevents && cargo clippy && cargo clean
 	cd templates/rust/http && cargo clippy && cargo clean
+
+.PHONY: check-typescript
+check-typescript: ## Check TypeScript templates' source
+	cd templates/typescript/cloudevents && npm ci && npx eslint --ext .ts . && rm -rf node_modules build
+	cd templates/typescript/http && npm ci && npx eslint --ext .ts . && rm -rf node_modules build
 
 .PHONY: test-templates
 test-templates: test-go test-node test-python test-quarkus test-springboot test-rust test-typescript ## Run all template tests

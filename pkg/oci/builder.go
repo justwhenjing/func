@@ -117,6 +117,13 @@ func (b *Builder) Build(ctx context.Context, f fn.Function, pp []fn.Platform) (e
 		return
 	}
 	defer cleanup(job)
+	defer func() {
+		// Always remove our own PID link when build completes
+		if job.verbose {
+			fmt.Fprintf(os.Stderr, "rm %v\n", job.pidLink())
+		}
+		_ = os.Remove(job.pidLink())
+	}()
 
 	// 3) 生成脚手架代码
 	if err = scaffold(job); err != nil {
@@ -574,7 +581,6 @@ func pullBase(job buildJob, p v1.Platform) (image v1.Image, err error) {
 	}
 
 	// TODO 可以增加选项,不拉取基础镜像
-
 	// 1) 解析镜像引用
 	ref, err := name.ParseReference(job.languageBuilder.Base(baseImage))
 	if err != nil {

@@ -16,7 +16,7 @@
 # Install GitLab
 #
 
-source "$(dirname "$(realpath "$0")")/common.sh"
+source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
 function install_gitlab() {
   echo "${blue}Installing GitLab${reset}"
@@ -28,7 +28,16 @@ kind: Namespace
 apiVersion: v1
 metadata:
   name: gitlab
----
+EOF
+
+# Creation is nearly immediate but for some reason pod wouldnt get created at all
+# in some cases
+  $KUBECTL wait sa/default --for=create -n gitlab --timeout=1m
+  echo "<<run: kubectl -n gitlab get sa"
+  kubectl -n gitlab get sa
+  echo "<<END"
+
+  $KUBECTL apply -f - <<EOF
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -66,7 +75,7 @@ spec:
           mountPath: /var/opt/gitlab
       env:
         - name: GITLAB_ROOT_PASSWORD
-          value: ${GITLAB_ROOT_PASSWORD}
+          value: "${GITLAB_ROOT_PASSWORD}"
         - name: GITLAB_OMNIBUS_CONFIG
           value: |
             external_url 'http://${gitlab_host}'
@@ -165,7 +174,7 @@ spec:
 
 EOF
 
-  sleep 1
+  sleep 10
   $KUBECTL wait pod --for=condition=Ready -l '!job-name' -n gitlab --timeout=5m
 
   echo '::group::Waiting for Gitlab'

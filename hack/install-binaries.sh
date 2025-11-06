@@ -16,19 +16,19 @@
 # Installs binaries on linux systems.
 #
 
-source "$(dirname "$(realpath "$0")")/common.sh"
+source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
 install_binaries() {
   assert_supported_os
   set_os_arch_vars
   warn_architecture
 
-  local root="$(dirname "$(realpath "$0")")"
+  local root="$(cd "$(dirname "$0")" && pwd)"
   local bin="${root}/bin"
 
   local kubectl_version=1.33.1
   local kind_version=0.29.0
-  local dapr_version=1.14.1
+  local dapr_version=1.16.0
   local helm_version=3.18.0
   local stern_version=1.32.0
   local kn_version=1.18.0

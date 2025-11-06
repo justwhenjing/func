@@ -27,7 +27,13 @@ var (
 	// TODO: change the wording of this error to not be CLI-specific;
 	// eg "registry required".  Then catch the error in the CLI and add the
 	// cli-specific usage hints there
-	ErrRegistryRequired = errors.New("registry required to build function, please set with `--registry` or the FUNC_REGISTRY environment variable")
+	ErrRegistryRequired = errors.New("registry required")
+
+	// ErrPlatformNotSupported is returned when a platform is specified for a builder that doesn't support it
+	ErrPlatformNotSupported = errors.New("platform not supported by builder")
+
+	// ErrConflictingImageAndRegistry is returned when both --image and --registry flags are explicitly provided
+	ErrConflictingImageAndRegistry = errors.New("both --image and --registry flags provided")
 )
 
 // ErrNotInitialized indicates that a function is uninitialized
@@ -72,4 +78,12 @@ type ErrRunTimeout struct {
 
 func (e ErrRunTimeout) Error() string {
 	return fmt.Sprintf("timed out waiting for function to be ready for %s", e.Timeout)
+}
+
+type ErrEnvNotExist struct {
+	Name string
+}
+
+func (e ErrEnvNotExist) Error() string {
+	return fmt.Sprintf("environment variable %q does not exist", e.Name)
 }

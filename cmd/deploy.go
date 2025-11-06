@@ -254,19 +254,13 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 	if !f.Initialized() {
 		if !cfg.Remote || f.Build.Git.URL == "" {
 			// Only error if this is not a fully remote build
-			return fmt.Errorf(`no function found in current directory.
-You need to be inside a function directory to deploy it.
-
-Try this:
-  func create --language go myfunction    Create a new function
-  cd myfunction                          Go into the function directory
-  func deploy --registry <registry>      Deploy to the cloud
-
-Or if you have an existing function:
-  cd path/to/your/function              Go to your function directory
-  func deploy --registry <registry>     Deploy the function
-
-For more detailed deployment options, run 'func deploy --help'`)
+			// Layer 2: Wrap technical error with CLI-specific guidance
+			var errNotInit *fn.ErrNotInitialized
+			notInitErr := fn.NewErrNotInitialized(f.Root)
+			if errors.As(notInitErr, &errNotInit) {
+				return wrapNotInitializedError(notInitErr, "deploy")
+			}
+			return notInitErr
 		} else {
 			// TODO: this case is not supported because the pipeline
 			// implementation requires the function's name, which is in the
@@ -278,9 +272,42 @@ For more detailed deployment options, run 'func deploy --help'`)
 
 	// Now that we know function exists, proceed with prompting
 	if cfg, err = cfg.Prompt(); err != nil {
+		// Layer 2: Catch technical errors and provide CLI-specific user-friendly messages
+		if errors.Is(err, fn.ErrRegistryRequired) {
+			return wrapRegistryRequiredError(err, "deploy")
+		}
 		return
 	}
 	if err = cfg.Validate(cmd); err != nil {
+		// Layer 2: Catch technical errors and provide CLI-specific user-friendly messages
+		if errors.Is(err, fn.ErrConflictingImageAndRegistry) {
+			return fmt.Errorf(`%w
+
+Cannot use both --image and --registry together. Choose one:
+
+  Use --image for complete image name:
+    func deploy --image example.com/user/myfunc
+
+  Use --registry for automatic naming:
+    func deploy --registry example.com/user
+
+Note: FUNC_REGISTRY environment variable doesn't conflict with --image flag
+
+For more options, run 'func deploy --help'`, err)
+		}
+		if errors.Is(err, fn.ErrPlatformNotSupported) {
+			return fmt.Errorf(`%w
+
+The --platform flag is only supported with the S2I builder.
+
+Try this:
+  func deploy --registry <registry> --builder=s2i --platform linux/amd64
+
+Or remove the --platform flag:
+  func deploy --registry <registry>
+
+For more options, run 'func deploy --help'`, err)
+		}
 		return
 	}
 	if f, err = cfg.Configure(f); err != nil { // Updates f with deploy cfg
@@ -707,7 +734,7 @@ func (c deployConfig) Prompt() (deployConfig, error) {
 // Validate the config passes an initial consistency check
 func (c deployConfig) Validate(cmd *cobra.Command) (err error) {
 	// Bubble validation
-	if err = c.buildConfig.Validate(); err != nil {
+	if err = c.buildConfig.Validate(cmd); err != nil {
 		return
 	}
 
