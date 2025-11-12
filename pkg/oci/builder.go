@@ -24,7 +24,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/pkg/errors"
@@ -582,24 +581,18 @@ func pullBase(job buildJob, p v1.Platform) (image v1.Image, err error) {
 
 	// TODO 可以增加选项,不拉取基础镜像
 	// 1) 解析镜像引用
-	ref, err := name.ParseReference(job.languageBuilder.Base(baseImage))
+	ref, err := name.ParseReference(baseImage)
 	if err != nil {
 		return
 	}
 
-	// 2) 拉取远程镜像(依赖OCI的默认认证支持)
-	// 读取docker的配置文件 ~/.docker/config.json
-	desc, err := remote.Get(ref, remote.WithPlatform(p))
+	// 2) 读取本地镜像
+	image, err = daemon.Image(ref)
 	if err != nil {
 		return
 	}
 
-	// 3) 获取镜像描述符，直接或通过平台索引
-	if image, err = desc.Image(); err != nil {
-		return
-	}
-
-	// 4) 环境基础镜像层
+	// 3) 环境基础镜像层
 	layers, err := image.Layers()
 	if err != nil {
 		return

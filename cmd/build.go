@@ -107,7 +107,7 @@ EXAMPLES
 	// 指定构建器镜像,用于分阶段构建,可以使用--builder-image 或者 FUNC_BUILDER_IMAGE 指定
 	cmd.Flags().StringP("builder-image", "", builderImage,
 		"Specify a custom builder image for use by the builder other than its default. ($FUNC_BUILDER_IMAGE)")
-    // 指定基础镜像,可以使用--base-image 或者 FUNC_BASE_IMAGE 指定(只有host模式可以使用)
+	// 指定基础镜像,可以使用--base-image 或者 FUNC_BASE_IMAGE 指定(只有host模式可以使用)
 	cmd.Flags().StringP("base-image", "", f.Build.BaseImage,
 		"Override the base image for your function (host builder only)")
 	// 指定构建镜像名称,可以使用--image 或者 FUNC_IMAGE 指定(只有host模式可以使用)
