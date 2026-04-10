@@ -1,0 +1,17 @@
+api = "0.12"
+
+[buildpack]
+id = "zte.com.cn/buildpacks/go"
+name = "Common Core Network Go Function Buildpack"
+version = "{{ .semver }}"
+
+[[stacks]]
+id = "zte.com.cn/stack"
+
+[[targets]]
+os = "linux"
+arch = "amd64"
+
+[[targets]]
+os = "linux"
+arch = "arm64"
