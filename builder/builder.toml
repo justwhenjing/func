@@ -1,0 +1,59 @@
+description = "Tiny base image (CCSP) with buildpacks for Java, Java Native Image and Go"
+
+[[buildpacks]]
+uri = "./buildpacks_go"
+id = "zte.com.cn/buildpacks/go"
+version = "{{ .semver }}"
+
+[[buildpacks]]
+# docker://docker.io/paketobuildpacks/java-native-image:14.3.0
+uri = "zxun-vnfp-release-docker.artnj.zte.com.cn/buildpacks/java-native-image:14.3.0"
+version = "14.3.0"
+
+[[buildpacks]]
+# docker://docker.io/paketobuildpacks/java:21.4.0
+uri = "zxun-vnfp-release-docker.artnj.zte.com.cn/buildpacks/java:21.4.0"
+version = "21.4.0"
+
+[[buildpacks]]
+# docker://docker.io/paketobuildpacks/procfile:5.13.1
+uri = "zxun-vnfp-release-docker.artnj.zte.com.cn/buildpacks/procfile:5.13.1"
+version = "5.13.1"
+
+[[buildpacks]]
+# docker://docker.io/paketocommunity/rust:0.65.0
+uri = "zxun-vnfp-release-docker.artnj.zte.com.cn/buildpacks/rust:0.65.0"
+version = "0.65.0"
+
+[lifecycle]
+version = "0.21.7"
+
+[[order]]
+[[order.group]]
+id = "zte.com.cn/buildpacks/go"
+version = "{{ .semver }}"
+
+[[order]]
+[[order.group]]
+id = "paketo-buildpacks/java-native-image"
+version = "14.3.0"
+
+[[order]]
+[[order.group]]
+id = "paketo-buildpacks/java"
+version = "21.4.0"
+
+[[order]]
+[[order.group]]
+id = "paketo-buildpacks/procfile"
+version = "5.13.1"
+
+[[order]]
+[[order.group]]
+id = "paketo-community/rust"
+version = "0.65.0"
+
+[stack]
+build-image = "zxun-vnfp-release-docker.artnj.zte.com.cn/buildpacks/stack:{{ .semver }}"
+id = "zte.com.cn/stack"
+run-image = "zxun-vnfp-release-docker.artnj.zte.com.cn/buildpacks/run:latest"
