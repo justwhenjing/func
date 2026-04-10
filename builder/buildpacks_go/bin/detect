@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =============================================================================
+# CCN Go Buildpack Detect Script
+# =============================================================================
+# Arguments:
+#   $1 - platform_dir: Platform directory containing env files
+#   $2 - plan_path: Path to build plan file
+#
+# Exit Codes:
+#   0 - This buildpack should be used
+#   1 - This buildpack should not be used
+#   100-107 - Error codes
+# =============================================================================
+
+platform_dir="$1"
+plan_path="$2"
+
+# Buildpack provided environment variables
+build_config_dir="${CNB_BUILD_CONFIG_DIR:-/cnb/build-config}"
+app_dir="${CNB_APP_DIR:-/workspace}"
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+# Read environment variable from platform env files
+read_env() {
+    local var_name="$1"
+    local default_value="${2:-}"
+
+    # 1. Check build-config/env (highest priority)
+    if [[ -f "${build_config_dir}/env/${var_name}" ]]; then
+        cat "${build_config_dir}/env/${var_name}"
+        return 0
+    fi
+
+    # 2. Check platform/env
+    if [[ -f "${platform_dir}/env/${var_name}" ]]; then
+        cat "${platform_dir}/env/${var_name}"
+        return 0
+    fi
+
+    # 3. Return default
+    echo -n "${default_value}"
+    return 0
+}
+
+log_info() {
+    echo "    [buildpack] $*" >&2
+}
+
+# =============================================================================
+# Detect Go Project
+# =============================================================================
+
+# Check for go.mod file
+if [[ ! -f "${app_dir}/go.mod" ]]; then
+    log_info "No go.mod found, skipping"
+    exit 100
+fi
+
+log_info "Go project detected (go.mod found)"
+
+# =============================================================================
+# Check Runtime Constraint
+# =============================================================================
+
+# Check if a specific runtime is requested
+requested_runtime=$(read_env "CNB_RUNTIME" "")
+
+if [[ -n "${requested_runtime}" && "${requested_runtime}" != "go" ]]; then
+    log_info "Requested runtime is '${requested_runtime}', not 'go', skipping"
+    exit 100
+fi
+
+# =============================================================================
+# Write Build Plan
+# =============================================================================
+
+cat > "${plan_path}" <<'EOF'
+EOF
+
+log_info "Detection successful"
+
+exit 0
