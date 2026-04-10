@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =============================================================================
+# CCN Go Buildpack Build Script
+# =============================================================================
+# Arguments:
+#   $1 - layers_dir: Output directory for buildpack layers
+#   $2 - platform_dir: Platform directory containing env files
+#   $3 - plan_path: Path to build plan file
+# =============================================================================
+
+layers_dir="$1"
+platform_dir="$2"
+plan_path="$3"
+
+# Buildpack provided environment variables
+build_config_dir="/cnb/build-config"
+app_dir="/workspace"
+work_dir="${app_dir}/.func/build"
+
+# Layer directories (buildpack id: zte.com.cn/buildpacks/go → lifecycle creates zte.com.cn_buildpacks_go/)
+layer_dir="${layers_dir}/go-buildpack"
+profile_dir="${layer_dir}/profile.d"
+
+# Output binary path (in layer, not app dir), lifecycle will copy layer
+output_bin="${layer_dir}/function"
+start_script="${profile_dir}/run.sh"
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+read_env() {
+    local var_name="$1"
+    local default_value="${2:-}"
+
+    if [[ -f "${build_config_dir}/env/${var_name}" ]]; then
+        cat "${build_config_dir}/env/${var_name}"
+        return 0
+    fi
+
+    if [[ -f "${platform_dir}/env/${var_name}" ]]; then
+        cat "${platform_dir}/env/${var_name}"
+        return 0
+    fi
+
+    echo -n "${default_value}"
+    return 0
+}
+
+log_info() {
+    echo "    [go-buildpack] $*" >&2
+}
+
+log_error() {
+    echo "    [go-buildpack] ERROR: $*" >&2
+}
+
+# =============================================================================
+# Create Layer Directories
+# =============================================================================
+mkdir -p "${layer_dir}"
+mkdir -p "${profile_dir}"
+
+# =============================================================================
+# Read Build Configuration from Environment
+# =============================================================================
+
+log_info "Reading build configuration..."
+
+CGO_ENABLED=$(read_env "CGO_ENABLED" "0")
+LDFLAGS=$(read_env "LDFLAGS" "-w -s")
+
+PLATFORM=$(read_env "PLATFORM" "")
+if [[ -n "${PLATFORM}" && "${PLATFORM}" == *"/"* ]]; then
+    GOOS="${PLATFORM%%/*}"
+    GOARCH="${PLATFORM#*/}"
+else
+    GOOS=$(read_env "GOOS" "$(go env GOOS)")
+    GOARCH=$(read_env "GOARCH" "$(go env GOARCH)")
+fi
+
+# Export Go environment variables
+export CGO_ENABLED="${CGO_ENABLED}"
+export GO111MODULE=on
+export GOOS="${GOOS}"
+export GOARCH="${GOARCH}"
+
+log_info "CGO_ENABLED=${CGO_ENABLED}"
+log_info "LDFLAGS=${LDFLAGS}"
+log_info "GOOS=${GOOS}"
+log_info "GOARCH=${GOARCH}"
+log_info "work_dir=${work_dir}"
+
+# =============================================================================
+# Build
+# =============================================================================
+
+log_info "Building Go application..."
+
+cd "${work_dir}"
+
+# Construct build arguments
+build_args=(
+    build
+    -trimpath
+    -mod=vendor
+)
+
+# Add ldflags
+if [[ -n "${LDFLAGS}" ]]; then
+    build_args+=(-ldflags)
+    build_args+=("${LDFLAGS}")
+fi
+
+# Add output
+build_args+=(-o "${output_bin}")
+
+log_info "Executing: go ${build_args[*]}"
+
+# Execute build
+go mod tidy && go mod vendor
+go "${build_args[@]}" 2>&1 | while IFS= read -r line; do
+    log_info "${line}"
+done
+
+if [[ ! -f "${output_bin}" ]]; then
+    log_error "Build failed, output binary not found: ${output_bin}"
+    exit 1
+fi
+
+chmod +x "${output_bin}"
+
+# Clean up /workspace: remove all source code and build artifacts
+# Lifecycle will copy workspace
+rm -rf "${app_dir:?}"/*
+
+# Clean up Go module/build cache
+go clean -modcache -cache -testcache 2>/dev/null || true
+
+log_info "Build completed successfully: ${output_bin}"
+
+# =============================================================================
+# Write Layer Metadata (toml)
+# =============================================================================
+
+cat > "${layer_dir}.toml" <<EOF
+[types]
+launch = true
+build = false
+cache = false
+
+EOF
+
+# =============================================================================
+# Create Launch Script
+# =============================================================================
+
+cat > "${start_script}" <<LAUNCH_EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -f "${layer_dir}/function" ]]; then
+    exec "${layer_dir}/function" "\$@"
+fi
+
+exec "\$@"
+LAUNCH_EOF
+
+chmod +x "${start_script}"
+
+# =============================================================================
+# Write Build Plan Output (optional)
+# =============================================================================
+
+if [[ -n "${plan_path}" && -f "${plan_path}" ]]; then
+    log_info "Reading build plan..."
+fi
+
+log_info "Buildpack build completed successfully"
+
+exit 0
